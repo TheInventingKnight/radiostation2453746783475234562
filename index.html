@@ -7,561 +7,381 @@
   <style>
     :root {
       --bg: #050712;
-      --bg-soft: #070a18;
-      --bg-elevated: rgba(13, 19, 45, 0.82);
-      --bg-glass: rgba(10, 15, 40, 0.7);
+      --panel: rgba(11, 14, 35, 0.92);
+      --panel-soft: rgba(15, 19, 48, 0.9);
       --accent: #f5c96a;
-      --accent-soft: rgba(245, 201, 106, 0.16);
-      --accent-strong: #ffd98a;
-      --accent-alt: #7ad4f3;
+      --accent-2: #7ad4f3;
       --text-main: #f7f4ff;
       --text-soft: #c0c2de;
-      --text-muted: #888cb0;
-      --danger: #ff6b81;
+      --text-muted: #8286aa;
       --success: #7bdba8;
       --radius-lg: 24px;
-      --radius-md: 16px;
-      --radius-pill: 999px;
-      --shadow-soft: 0 30px 80px rgba(0, 0, 0, 0.65);
-      --border-soft: 1px solid rgba(255, 255, 255, 0.08);
-      --border-strong: 1px solid rgba(255, 255, 255, 0.18);
+      --shadow-soft: 0 30px 80px rgba(0, 0, 0, 0.7);
+      --border-soft: 1px solid rgba(255, 255, 255, 0.1);
       --blur: 24px;
       --transition-fast: 180ms ease-out;
-      --transition-med: 240ms ease-out;
+      --transition-med: 300ms ease-out;
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       min-height: 100vh;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-        "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #191b38 0, #050712 55%) fixed
-        no-repeat;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 0 0, #171936 0, #050712 55%) fixed no-repeat;
       color: var(--text-main);
       -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
       display: flex;
-      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      padding: 24px 12px;
     }
-    .page-shell {
+
+    .shell {
       position: relative;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      isolation: isolate;
+      width: 100%;
+      max-width: 960px;
+      border-radius: 32px;
+      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.22), transparent 55%) border-box,
+                  linear-gradient(135deg, rgba(9, 10, 30, 0.96), rgba(3, 4, 16, 0.98)) border-box;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(26px) saturate(140%);
       overflow: hidden;
+      isolation: isolate;
     }
-    /* Background glow layers */
-    .bg-orbit,
-    .bg-orbit::before,
-    .bg-orbit::after {
-      position: fixed;
-      inset: 0;
+
+    .bg-ornament {
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(245, 201, 106, 0.2), transparent 60%),
+        radial-gradient(circle at 100% 0%, rgba(122, 212, 243, 0.24), transparent 60%),
+        radial-gradient(circle at 50% 120%, rgba(255, 159, 186, 0.2), transparent 60%);
+      opacity: 0.7;
+      mix-blend-mode: screen;
       pointer-events: none;
       z-index: -1;
+      animation: ornamentPulse 20s ease infinite;
     }
-    .bg-orbit::before,
-    .bg-orbit::after {
-      content: "";
-      background:
-        radial-gradient(circle at 10% 0%, rgba(245, 201, 106, 0.18) 0%, transparent 55%),
-        radial-gradient(circle at 95% 5%, rgba(122, 212, 243, 0.22) 0%, transparent 60%),
-        radial-gradient(circle at 40% 110%, rgba(255, 159, 186, 0.16) 0%, transparent 60%);
-      filter: blur(4px);
-      opacity: 0.9;
-    }
-    .bg-orbit::after {
-      filter: blur(24px);
-      opacity: 0.5;
-    }
+    @keyframes ornamentPulse { 0%,100% { opacity: 0.6; } 50% { opacity: 0.8; } }
+
     .grain {
       pointer-events: none;
-      position: fixed;
+      position: absolute;
       inset: -40px;
-      opacity: 0.18;
+      opacity: 0.22;
       mix-blend-mode: soft-light;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3' numOctaves='2' stitchTiles='noStitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.85'/%3E%3C/svg%3E");
       z-index: -1;
     }
-    main {
-      flex: 1;
-      width: 100%;
-      max-width: 1260px;
-      margin: 0 auto;
-      padding: 18px 16px 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.3fr);
+      gap: 24px;
+      padding: 24px 24px 20px;
     }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 10px 16px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.22), transparent 56%)
-        border-box,
-        linear-gradient(120deg, rgba(6, 9, 29, 0.96), rgba(4, 6, 20, 0.98)) border-box;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(22px) saturate(140%);
-      position: sticky;
-      top: 12px;
-      z-index: 5;
+
+    @media (max-width: 780px) {
+      .shell { border-radius: 22px; }
+      .layout { grid-template-columns: 1fr; }
     }
-    .brand {
+
+    @media (max-width: 640px) {
+      .layout { padding: 18px 16px 16px; }
+    }
+
+    .hero { display: flex; flex-direction: column; gap: 18px; }
+
+    .brand-row {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 0;
     }
-    .brand-icon {
-      --size: 40px;
-      width: var(--size);
-      height: var(--size);
+
+    .brand-badge {
+      width: 40px;
+      height: 40px;
       border-radius: 40%;
       border: 1px solid rgba(255, 255, 255, 0.18);
       background:
         radial-gradient(circle at 25% 10%, rgba(255, 255, 255, 0.8), transparent 45%),
         radial-gradient(circle at 80% 80%, rgba(245, 201, 106, 0.85), rgba(245, 201, 106, 0.1)),
         conic-gradient(from 190deg, #f5c96a, #7ad4f3, #f7a1cb, #f5c96a);
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7);
       position: relative;
       overflow: hidden;
     }
-    .brand-icon::after {
+
+    .brand-badge::after {
       content: "";
       position: absolute;
       inset: 32%;
       border-radius: 50%;
       border: 1px solid rgba(255, 255, 255, 0.7);
-      box-shadow:
-        0 0 0 2px rgba(4, 6, 20, 0.6),
-        0 0 18px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 0 0 2px rgba(4, 6, 20, 0.7), 0 0 18px rgba(0, 0, 0, 0.8);
     }
-    .brand-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-    .brand-title {
-      font-weight: 680;
-      letter-spacing: 0.07em;
+
+    .brand-text-main {
+      font-size: 0.82rem;
       text-transform: uppercase;
-      font-size: 0.84rem;
-      color: var(--accent-strong);
-      white-space: nowrap;
-    }
-    .brand-subtitle {
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.25em;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    nav {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-    }
-    .nav-pill {
-      padding: 6px 13px;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.19em;
-      border: 1px solid transparent;
-      background: transparent;
+      letter-spacing: 0.18em;
       color: var(--text-soft);
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
-      transition: background var(--transition-fast), color var(--transition-fast),
-        border-color var(--transition-fast), transform 100ms ease-out;
     }
-    .nav-pill::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.3), transparent 55%);
-      opacity: 0;
-      transition: opacity var(--transition-fast);
+
+    .brand-text-title {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-weight: 650;
+      color: var(--accent);
     }
-    .nav-pill:hover::before {
-      opacity: 1;
-    }
-    .nav-pill:hover {
-      border-color: rgba(255, 255, 255, 0.12);
-      background: rgba(10, 15, 40, 0.9);
-      color: var(--accent-strong);
-      transform: translateY(-1px);
-    }
-    .nav-pill--primary {
-      padding: 7px 18px;
-      background: linear-gradient(135deg, #f5c96a, #f7a1cb);
-      color: #130c05;
-      border-color: rgba(255, 255, 255, 0.24);
-      font-size: 0.8rem;
-      box-shadow:
-        0 16px 32px rgba(0, 0, 0, 0.66),
-        0 0 0 1px rgba(0, 0, 0, 0.6) inset;
-    }
-    .nav-pill--primary:hover {
-      background: linear-gradient(135deg, #ffd98a, #ffc0d8);
-      transform: translateY(-1px) translateZ(0);
-    }
-    /* Layout: hero + sidebar */
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1.4fr);
-      gap: 18px;
-      align-items: flex-start;
-    }
-    @media (max-width: 960px) {
-      header {
-        border-radius: 20px;
-        flex-wrap: wrap;
-        align-items: flex-start;
-      }
-      .brand-subtitle {
-        display: none;
-      }
-      .layout {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-    @media (max-width: 720px) {
-      main {
-        padding-inline: 12px;
-      }
-      header {
-        position: static;
-        border-radius: 16px;
-      }
-      nav {
-        width: 100%;
-        justify-content: flex-start;
-        overflow-x: auto;
-      }
-    }
-    /* Hero section */
-    .hero-card {
-      position: relative;
-      padding: 22px 22px 20px;
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(
-          135deg,
-          rgba(12, 16, 42, 0.95),
-          rgba(8, 9, 26, 0.98)
-        );
-      border: var(--border-soft);
-      box-shadow: var(--shadow-soft);
-      backdrop-filter: blur(var(--blur)) saturate(140%);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-    .hero-card::before {
-      content: "";
-      position: absolute;
-      inset: -60px;
-      background:
-        radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.26), transparent 60%),
-        radial-gradient(circle at 100% 0, rgba(122, 212, 243, 0.24), transparent 60%);
-      opacity: 0.9;
-      mix-blend-mode: screen;
-      pointer-events: none;
-    }
-    .hero-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 14px;
-      position: relative;
-      z-index: 1;
-    }
+
     .hero-kicker {
+      margin-top: 4px;
       font-size: 0.78rem;
       text-transform: uppercase;
-      letter-spacing: 0.22em;
-      color: var(--accent-alt);
+      letter-spacing: 0.16em;
+      color: var(--accent-2);
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
+      gap: 7px;
     }
+
     .hero-kicker-dot {
-      width: 8px;
-      height: 8px;
+      width: 9px;
+      height: 9px;
       border-radius: 999px;
-      background: radial-gradient(circle, #6ef5a3 0, #0a6835 72%);
-      box-shadow:
-        0 0 0 4px rgba(110, 245, 163, 0.16),
-        0 0 14px rgba(110, 245, 163, 0.9);
+      background: radial-gradient(circle, #6ef5a3 0, #07552c 72%);
+      box-shadow: 0 0 0 4px rgba(110, 245, 163, 0.2), 0 0 16px rgba(110, 245, 163, 1);
+      animation: pulseDot 2s infinite;
     }
+    @keyframes pulseDot { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+
     .hero-title {
-      font-size: clamp(2rem, 3vw + 0.8rem, 2.7rem);
-      letter-spacing: 0.06em;
+      margin-top: 10px;
+      font-size: clamp(1.9rem, 2.6vw + 1rem, 2.5rem);
+      font-weight: 720;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      font-weight: 730;
       line-height: 1.1;
-      margin-bottom: 10px;
     }
+
     .hero-title span {
       background: linear-gradient(120deg, #f5c96a, #7ad4f3);
       -webkit-background-clip: text;
       color: transparent;
     }
+
     .hero-subtitle {
-      font-size: 0.96rem;
-      color: var(--text-soft);
-      max-width: 540px;
-      line-height: 1.5;
-    }
-    .hero-subtitle strong {
-      color: var(--accent-strong);
-      font-weight: 600;
-    }
-    .hero-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 14px;
-    }
-    .hero-tag {
-      padding: 5px 11px;
-      border-radius: 999px;
-      border: 1px solid rgba(245, 201, 106, 0.45);
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.22), transparent 60%);
-      font-size: 0.7rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--accent-strong);
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .hero-tag-soft {
-      border-color: rgba(255, 255, 255, 0.12);
-      background: rgba(8, 12, 38, 0.92);
-      color: var(--text-soft);
-    }
-    .hero-tag-soft-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(122, 212, 243, 0.7);
-      box-shadow: 0 0 12px rgba(122, 212, 243, 0.8);
-    }
-    .hero-verse {
       margin-top: 10px;
-      padding: 10px 14px;
+      font-size: 0.95rem;
+      color: var(--text-soft);
+      max-width: 480px;
+      line-height: 1.6;
+    }
+
+    .hero-subtitle strong { color: var(--accent); font-weight: 600; }
+
+    .hero-verse {
+      margin-top: 12px;
+      padding: 9px 12px;
       border-radius: 16px;
-      border: 1px dashed rgba(255, 255, 255, 0.15);
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.09), transparent 65%);
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.12), transparent 70%);
       font-size: 0.82rem;
       color: var(--text-soft);
       line-height: 1.5;
-      max-width: 520px;
     }
-    .hero-verse em {
-      color: var(--accent-strong);
-      font-style: normal;
-    }
+
+    .hero-verse em { color: var(--accent); font-style: normal; }
+
     .hero-verse small {
       display: block;
       margin-top: 4px;
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
+      font-size: 0.74rem;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text-muted);
     }
-    /* Live station / player */
-    .hero-player-shell {
-      margin-top: 8px;
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr);
-      gap: 14px;
-      align-items: stretch;
+
+    .pill-row {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    @media (max-width: 840px) {
-      .hero-player-shell {
-        grid-template-columns: minmax(0, 1fr);
-      }
+
+    .pill {
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(8, 9, 26, 0.96);
+      font-size: 0.74rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-soft);
     }
-    .player-card {
-      border-radius: var(--radius-md);
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.12), transparent 55%)
-        border-box,
-        linear-gradient(145deg, rgba(6, 8, 26, 0.98), rgba(3, 4, 16, 0.98)) border-box;
+
+    .pill-accent {
+      border-color: rgba(245, 201, 106, 0.55);
+      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.22), transparent 65%);
+      color: var(--accent);
+    }
+
+    .player-panel {
+      border-radius: var(--radius-lg);
+      background: var(--panel);
       border: var(--border-soft);
-      padding: 13px 14px 16px;
-      box-shadow: 0 18px 55px rgba(0, 0, 0, 0.75);
+      padding: 16px 16px 14px;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.8);
     }
+
     .player-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 10px;
     }
+
     .player-status {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 7px;
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
+      gap: 8px;
+      font-size: 0.78rem;
       color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
     }
-    .player-badge-live {
-      padding: 3px 10px;
+
+    .badge-live {
+      padding: 4px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(110, 245, 163, 0.85);
-      color: var(--success);
+      border: 1px solid rgba(110, 245, 163, 0.9);
+      background: radial-gradient(circle at 0 0, rgba(110, 245, 163, 0.3), transparent 65%);
+      color: #caffdd;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: radial-gradient(circle at 0 0, rgba(110, 245, 163, 0.28), transparent 65%);
-      font-size: 0.72rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
     }
-    .player-badge-live-dot {
-      width: 7px;
-      height: 7px;
+
+    .badge-live-dot {
+      width: 8px;
+      height: 8px;
       border-radius: 999px;
-      background: radial-gradient(circle, #6ef5a3 0, #095f32 72%);
-      box-shadow:
-        0 0 0 4px rgba(110, 245, 163, 0.25),
-        0 0 20px rgba(110, 245, 163, 1);
+      background: radial-gradient(circle, #6ef5a3 0, #07552c 72%);
+      box-shadow: 0 0 0 3px rgba(110, 245, 163, 0.18), 0 0 14px rgba(110, 245, 163, 1);
+      animation: pulseDot 2s infinite;
     }
-    .player-time {
-      font-size: 0.76rem;
+
+    .player-status-text {
+      font-size: 0.78rem;
       color: var(--text-muted);
+      text-align: right;
+      position: relative;
+      min-height: 1.2em;
     }
+
+    /* Loading animation for status text */
+    .player-status-text.loading::after {
+      content: "";
+      display: inline-block;
+      width: 4px;
+      height: 1em;
+      background: currentColor;
+      animation: blink 1s infinite;
+      margin-left: 4px;
+    }
+    @keyframes blink { 0%,100% { opacity: 0; } 50% { opacity: 1; } }
+
     .player-main {
-      display: flex;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
       align-items: center;
     }
+
     .player-art {
-      flex: 0 0 64px;
+      width: 64px;
       height: 64px;
       border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(145deg, #1b102e, #0e1331),
+                  radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.35), transparent 65%);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.8) inset;
       position: relative;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background:
-        linear-gradient(145deg, #1b102e, #0e1331),
-        radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.38), transparent 60%);
-      box-shadow:
-        0 16px 32px rgba(0, 0, 0, 0.85),
-        0 0 0 1px rgba(0, 0, 0, 0.7) inset;
     }
-    .player-art::before,
-    .player-art::after {
-      content: "";
-      position: absolute;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.55);
-    }
-    .player-art::before {
-      inset: 22%;
-    }
-    .player-art::after {
-      inset: 40%;
-      border-style: dashed;
-      opacity: 0.85;
-    }
+
+    /* Removed the inner circles that were overlaying the art */
     .player-wave {
       position: absolute;
       inset: auto 0 -24% 0;
       height: 48px;
       background:
-        radial-gradient(circle at 12% -20%, rgba(245, 201, 106, 0.7) 0, transparent 55%),
-        radial-gradient(circle at 80% 0, rgba(122, 212, 243, 0.7) 0, transparent 55%);
+        radial-gradient(circle at 12% -20%, rgba(245, 201, 106, 0.9) 0, transparent 55%),
+        radial-gradient(circle at 80% 0, rgba(122, 212, 243, 0.9) 0, transparent 55%);
       mix-blend-mode: screen;
       opacity: 0.7;
-      filter: blur(12px);
+      filter: blur(10px);
+      animation: waveMove 8s linear infinite;
     }
-    .player-track {
-      flex: 1;
-      min-width: 0;
+    @keyframes waveMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+    #album-art {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+
+    .player-art.has-art #album-art {
+      opacity: 1;
+    }
+
+    .player-track-info {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0;
     }
-    .player-track-title {
-      font-size: 0.94rem;
+
+    .track-title {
+      font-size: 0.96rem;
       font-weight: 600;
       letter-spacing: 0.03em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .player-track-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px 10px;
-      font-size: 0.78rem;
+
+    .track-meta-row {
+      font-size: 0.8rem;
       color: var(--text-soft);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .player-track-meta span {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .tag-pill {
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background: rgba(8, 11, 35, 0.95);
-      font-size: 0.7rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .player-controls {
+
+    .player-controls-row {
+      margin-top: 6px;
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 4px;
     }
-    .btn-ghost {
-      width: 28px;
-      height: 28px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: transparent;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-soft);
-      cursor: pointer;
-      font-size: 0.85rem;
-      transition: background var(--transition-fast), color var(--transition-fast),
-        border-color var(--transition-fast), transform 100ms ease-out;
-    }
-    .btn-ghost:hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(255, 255, 255, 0.32);
-      color: var(--accent-strong);
-      transform: translateY(-1px);
-    }
+
     .btn-main {
-      flex: 0 0 40px;
-      height: 40px;
+      width: 42px;
+      height: 42px;
       border-radius: 999px;
       border: none;
       background: radial-gradient(circle at 0 0, #f5c96a, #f7a1cb);
@@ -570,12 +390,16 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow:
-        0 16px 40px rgba(0, 0, 0, 0.85),
-        0 0 0 1px rgba(0, 0, 0, 0.8) inset;
-      transition: transform 90ms ease-out, box-shadow 90ms ease-out,
-        filter 160ms ease-out;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.8) inset;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-med);
     }
+
+    .btn-main:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 1), 0 0 0 1px rgba(0, 0, 0, 0.9) inset;
+    }
+
     .btn-main span {
       display: inline-block;
       width: 0;
@@ -584,838 +408,422 @@
       border-width: 9px 0 9px 14px;
       border-color: transparent transparent transparent #2f1a00;
       margin-left: 2px;
-      transition: all 0.2s;
+      transition: all var(--transition-fast);
     }
-    .btn-main:hover {
-      filter: brightness(1.04);
-      transform: translateY(-1px);
-      box-shadow:
-        0 18px 45px rgba(0, 0, 0, 0.95),
-        0 0 0 1px rgba(0, 0, 0, 0.8) inset;
+
+    .btn-main.playing span {
+      width: 14px;
+      height: 14px;
+      border-width: 0;
+      border-left: 4px solid #2f1a00;
+      border-right: 4px solid #2f1a00;
+      margin-left: 0;
     }
-    .btn-main:active {
-      transform: translateY(0);
-      box-shadow:
-        0 10px 25px rgba(0, 0, 0, 0.9),
-        0 0 0 1px rgba(0, 0, 0, 0.9) inset;
+
+    .player-tag {
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(8, 9, 26, 0.95);
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
     }
-    .player-timeline {
-      margin-top: 4px;
+
+    .timeline {
+      margin-top: 6px;
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 0.72rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
     }
-    .timeline-track {
+
+    .timeline-bar {
       position: relative;
-      height: 4px;
+      height: 5px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.07);
+      background: rgba(255, 255, 255, 0.08);
       overflow: hidden;
     }
+
     .timeline-fill {
       position: absolute;
-      inset: 0;
-      width: 32%;
+      inset: 0 0 0 0;
+      width: 0%;
       background: linear-gradient(90deg, #f5c96a, #f7a1cb);
-      border-radius: 999px;
       box-shadow: 0 0 10px rgba(245, 201, 106, 0.7);
+      transition: width 0.5s linear;
     }
-    .player-time-meta {
+
+    .timeline-time-row {
       display: flex;
       justify-content: space-between;
+      font-family: monospace;
     }
-    .player-side {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+
+    /* Up Next section – always visible */
+    .next-up {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.12);
+      font-size: 0.82rem;
+      color: var(--text-soft);
+      transition: opacity var(--transition-med);
     }
-    .player-side-header {
-      font-size: 0.78rem;
+
+    .next-up strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.76rem;
       text-transform: uppercase;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.14em;
       color: var(--text-muted);
     }
-    .player-side-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      font-size: 0.8rem;
-      color: var(--text-soft);
+
+    .next-up.empty {
+      opacity: 0.4;
     }
-    .station-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: radial-gradient(circle, #f5c96a 0, #7a4b00 72%);
-      box-shadow: 0 0 15px rgba(245, 201, 106, 0.9);
-    }
-    .player-side-row span {
-      color: var(--text-muted);
-    }
-    .player-side-pill {
-      margin-top: 4px;
-      padding: 6px 9px;
-      border-radius: 14px;
-      border: 1px dashed rgba(255, 255, 255, 0.22);
-      background: rgba(4, 6, 22, 0.96);
-      font-size: 0.74rem;
-      color: var(--text-soft);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-    }
-    .player-side-pill strong {
-      color: var(--accent-strong);
-      font-weight: 500;
-    }
-    .now-pill-badge {
-      padding: 3px 7px;
-      border-radius: 999px;
-      background: rgba(245, 201, 106, 0.12);
-      border: 1px solid rgba(245, 201, 106, 0.6);
-      font-size: 0.7rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--accent-strong);
-    }
-    /* Blocks: schedule + playlists / episodes */
-    .blocks-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.7fr);
-      gap: 18px;
-      align-items: stretch;
-    }
-    @media (max-width: 960px) {
-      .blocks-row {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-    .block {
+
+    .info-panel {
       border-radius: var(--radius-lg);
-      background: linear-gradient(145deg, rgba(5, 7, 20, 0.95), rgba(3, 4, 15, 0.97));
+      background: var(--panel-soft);
       border: var(--border-soft);
-      box-shadow: var(--shadow-soft);
       padding: 16px 16px 14px;
-      position: relative;
-      overflow: hidden;
-    }
-    .block::before {
-      content: "";
-      position: absolute;
-      inset: -30%;
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.18), transparent 60%);
-      opacity: 0.8;
-      mix-blend-mode: soft-light;
-      pointer-events: none;
-    }
-    .block-head {
-      position: relative;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-    .block-title {
-      font-size: 0.92rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--text-soft);
-    }
-    .block-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-    .block-cta {
-      font-size: 0.8rem;
-      color: var(--accent-strong);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-    }
-    .block-cta svg {
-      width: 14px;
-      height: 14px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.5;
-    }
-    /* Schedule list */
-    .schedule-list {
-      position: relative;
-      list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      margin-top: 2px;
-    }
-    .schedule-row {
-      display: grid;
-      grid-template-columns: 90px minmax(0, 1fr) auto;
-      gap: 8px;
-      align-items: center;
-      padding: 8px 9px;
-      border-radius: 14px;
-      background: rgba(8, 10, 30, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      font-size: 0.8rem;
-      color: var(--text-soft);
-      transition: background var(--transition-med), border-color var(--transition-med),
-        transform 100ms ease-out;
-    }
-    .schedule-row--highlight {
-      background: rgba(12, 17, 46, 0.98);
-      border-color: rgba(245, 201, 106, 0.35);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.75);
-    }
-    .schedule-time {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .schedule-main {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-    .schedule-title {
-      font-size: 0.86rem;
-      font-weight: 500;
-    }
-    .schedule-meta {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-    .schedule-tag {
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      font-size: 0.7rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .schedule-row:hover {
-      background: rgba(14, 19, 52, 0.96);
-      border-color: rgba(245, 201, 106, 0.35);
-      transform: translateY(-1px);
-    }
-    .schedule-row--highlight:hover {
-      transform: translateY(-1px) scale(1.01);
-    }
-    /* Shows / episodes grid */
-    .shows-grid {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
-      margin-top: 4px;
     }
-    @media (max-width: 960px) {
-      .shows-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-    @media (max-width: 640px) {
-      .shows-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-    .show-card {
-      position: relative;
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.15), transparent 60%),
-        linear-gradient(145deg, rgba(9, 12, 36, 0.96), rgba(6, 7, 24, 0.98));
-      padding: 11px 10px 11px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: var(--text-soft);
-      cursor: pointer;
-      transition: transform 120ms ease-out, box-shadow 120ms ease-out,
-        border-color var(--transition-fast), background var(--transition-fast);
-    }
-    .show-card::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.22), transparent 60%);
-      opacity: 0;
-      transition: opacity var(--transition-fast);
-      mix-blend-mode: screen;
-      pointer-events: none;
-    }
-    .show-card:hover {
-      transform: translateY(-2px);
-      border-color: rgba(245, 201, 106, 0.55);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.9);
-    }
-    .show-card:hover::before {
-      opacity: 1;
-    }
-    .show-kicker {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: var(--text-muted);
-    }
-    .show-title {
-      font-size: 0.88rem;
-      font-weight: 500;
-      color: var(--text-main);
-    }
-    .show-meta {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-    .show-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 6px;
-      margin-top: 4px;
-      font-size: 0.74rem;
-    }
-    .chip {
-      padding: 3px 7px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: var(--text-soft);
-    }
-    .chip-accent {
-      background: rgba(245, 201, 106, 0.16);
-      border-color: rgba(245, 201, 106, 0.7);
-      color: var(--accent-strong);
-    }
-    /* Discover strip */
-    .discover-strip {
-      margin-top: 16px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: linear-gradient(120deg, rgba(245, 201, 106, 0.16), rgba(122, 212, 243, 0.12));
-      border: 1px solid rgba(245, 201, 106, 0.5);
-      font-size: 0.78rem;
-      color: #130c05;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      position: relative;
-      overflow: hidden;
-    }
-    .discover-strip::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.3), transparent 60%);
-      opacity: 0.8;
-      mix-blend-mode: soft-light;
-    }
-    .discover-label {
-      position: relative;
-      padding: 3px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.42);
-      background: rgba(255, 255, 255, 0.6);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      font-size: 0.7rem;
-    }
-    .discover-text {
-      position: relative;
-      color: #2a1802;
-      flex: 1;
-    }
-    .discover-text strong {
-      font-weight: 600;
-    }
-    .discover-link {
-      position: relative;
-      font-weight: 500;
+
+    .info-title {
+      font-size: 0.84rem;
       text-transform: uppercase;
       letter-spacing: 0.18em;
-      font-size: 0.74rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: #3a2203;
-    }
-    .discover-link svg {
-      width: 14px;
-      height: 14px;
-      stroke: currentColor;
-      stroke-width: 1.5;
-      fill: none;
-    }
-    /* Sidebar: about + archive */
-    .side-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .side-card {
-      border-radius: var(--radius-lg);
-      background: linear-gradient(145deg, rgba(7, 8, 26, 0.95), rgba(3, 4, 14, 0.98));
-      border: var(--border-soft);
-      box-shadow: var(--shadow-soft);
-      padding: 15px 14px 13px;
-      position: relative;
-      overflow: hidden;
-    }
-    .side-card::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(circle at 100% 0, rgba(122, 212, 243, 0.14), transparent 60%);
-      opacity: 0.8;
-      mix-blend-mode: soft-light;
-    }
-    .side-head {
-      position: relative;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    .side-title {
-      font-size: 0.92rem;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
       color: var(--text-soft);
     }
-    .side-pill {
-      padding: 3px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      font-size: 0.7rem;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
+
+    .info-body {
+      font-size: 0.85rem;
+      color: var(--text-soft);
+      line-height: 1.6;
     }
-    .side-body {
-      position: relative;
+
+    .info-body strong { color: var(--accent); font-weight: 600; }
+
+    .info-meta-list {
+      margin-top: 4px;
       font-size: 0.8rem;
-      color: var(--text-soft);
+      color: var(--text-muted);
       line-height: 1.5;
     }
-    .side-body strong {
-      color: var(--accent-strong);
-      font-weight: 600;
-    }
-    .side-body small {
-      display: block;
+
+    .info-meta-list span { display: block; }
+
+    .tech-pill {
       margin-top: 6px;
-      font-size: 0.76rem;
-      color: var(--text-muted);
-    }
-    .side-divider {
-      margin: 10px 0;
-      height: 1px;
-      background: linear-gradient(
-        to right,
-        rgba(255, 255, 255, 0) 0,
-        rgba(255, 255, 255, 0.12) 35%,
-        rgba(255, 255, 255, 0) 100%
-      );
-    }
-    .archive-list {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      font-size: 0.78rem;
-      color: var(--text-soft);
-    }
-    .archive-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 10px;
-      padding: 6px 7px;
+      padding: 6px 9px;
       border-radius: 12px;
-      background: rgba(5, 6, 20, 0.96);
-      transition: background var(--transition-fast), transform 100ms ease-out;
-    }
-    .archive-main {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-      min-width: 0;
-    }
-    .archive-title {
-      font-size: 0.8rem;
-      color: var(--text-main);
-    }
-    .archive-meta {
-      font-size: 0.76rem;
-      color: var(--text-muted);
-    }
-    .archive-duration {
-      font-size: 0.76rem;
-      color: var(--text-muted);
-    }
-    .archive-row:hover {
-      background: rgba(12, 15, 40, 0.98);
-      transform: translateY(-1px);
-    }
-    .side-footer {
-      position: relative;
-      margin-top: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-    .side-footer a {
-      color: var(--accent-strong);
-      text-decoration: none;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-    }
-    .side-footer a:hover {
-      text-decoration: underline;
-    }
-    .newsletter-pill {
-      border-radius: var(--radius-md);
-      background: radial-gradient(circle at 0 0, rgba(245, 201, 106, 0.18), transparent 55%),
-        linear-gradient(145deg, rgba(8, 9, 26, 0.98), rgba(3, 4, 14, 0.98));
-      border: 1px solid rgba(245, 201, 106, 0.65);
-      padding: 10px 11px 10px;
-      position: relative;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: var(--text-soft);
-    }
-    .newsletter-pill::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.4), transparent 55%);
-      opacity: 0.6;
-      mix-blend-mode: soft-light;
-    }
-    .newsletter-main {
-      position: relative;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-    }
-    .newsletter-title {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: var(--accent-strong);
-    }
-    .newsletter-sub {
-      position: relative;
-      font-size: 0.76rem;
-      color: var(--text-soft);
-    }
-    .newsletter-input-row {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 2px;
-    }
-    .newsletter-input {
-      flex: 1;
-      border-radius: 999px;
-      border: 1px solid rgba(0, 0, 0, 0.6);
-      background: rgba(15, 16, 35, 0.96);
-      padding: 7px 10px;
-      color: var(--text-main);
+      border: 1px dashed rgba(255, 255, 255, 0.18);
       font-size: 0.78rem;
-      outline: none;
+      color: var(--text-soft);
+      background: rgba(5, 6, 18, 0.98);
     }
-    .newsletter-input::placeholder {
-      color: var(--text-muted);
-    }
-    .newsletter-btn {
-      flex: 0 0 auto;
-      border-radius: 999px;
-      border: none;
-      padding: 7px 12px;
-      background: rgba(245, 201, 106, 0.96);
-      color: #130c05;
-      font-size: 0.74rem;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      cursor: pointer;
-      box-shadow:
-        0 10px 24px rgba(0, 0, 0, 0.85),
-        0 0 0 1px rgba(0, 0, 0, 0.7) inset;
-      transition: transform 90ms ease-out, box-shadow 90ms ease-out,
-        filter 160ms ease-out;
-    }
-    .newsletter-btn:hover {
-      filter: brightness(1.05);
-      transform: translateY(-1px);
-      box-shadow:
-        0 12px 28px rgba(0, 0, 0, 0.9),
-        0 0 0 1px rgba(0, 0, 0, 0.8) inset;
-    }
-    .newsletter-btn:active {
-      transform: translateY(0);
-      box-shadow:
-        0 8px 18px rgba(0, 0, 0, 0.9),
-        0 0 0 1px rgba(0, 0, 0, 0.9) inset;
-    }
-    footer {
-      width: 100%;
-      max-width: 1260px;
-      margin: 0 auto 18px;
-      padding: 0 16px;
-      font-size: 0.78rem;
+
+    .footer-row {
+      padding: 0 24px 18px;
+      font-size: 0.76rem;
       color: var(--text-muted);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       flex-wrap: wrap;
     }
-    footer span {
-      opacity: 0.85;
-    }
-    footer a {
+
+    .footer-row a {
       color: var(--text-soft);
       text-decoration: none;
       text-transform: uppercase;
       letter-spacing: 0.16em;
       font-size: 0.7rem;
     }
-    footer a:hover {
-      color: var(--accent-strong);
-    }
+
+    .footer-row a:hover { color: var(--accent); }
   </style>
 </head>
 <body>
-  <div class="page-shell">
-    <div class="bg-orbit"></div>
+  <div class="shell">
+    <div class="bg-ornament"></div>
     <div class="grain"></div>
-    <main>
-      <header>
-        <div class="brand">
-          <div class="brand-icon" aria-hidden="true"></div>
-          <div class="brand-text">
-            <div class="brand-title">Streams of Grace Radio</div>
-            <div class="brand-subtitle">Old Christian Hymns • 24/7 • Ad‑Free</div>
-          </div>
-        </div>
-        <nav aria-label="Primary navigation">
-          <button class="nav-pill">Live</button>
-          <button class="nav-pill">Schedule</button>
-          <button class="nav-pill">Shows</button>
-          <button class="nav-pill">Archive</button>
-          <button class="nav-pill nav-pill--primary">Listen now</button>
-        </nav>
-      </header>
-      <section class="layout">
-        <section class="hero-card">
-          <div class="hero-header">
+
+    <audio id="radio-audio" preload="none"></audio>
+
+    <div class="layout">
+      <section class="hero">
+        <header>
+          <div class="brand-row">
+            <div class="brand-badge" aria-hidden="true"></div>
             <div>
-              <div class="hero-kicker">
-                <span class="hero-kicker-dot"></span>
-                Live streaming • Streams of Grace Radio
-              </div>
-              <h1 class="hero-title">
-                Old Hymns, <span>New Light</span>.
-              </h1>
-              <p class="hero-subtitle">
-                Streaming a hand‑curated library of <strong>classic Christian hymns</strong>,
-                gospel quartets, Bible‑college choirs, and vintage radio choirs —
-                faithful to the message, beautifully restored for modern ears.
-              </p>
-              <div class="hero-meta">
-                <span class="hero-tag">24/7 Sovereign Grace &amp; Hymns</span>
-                <span class="hero-tag hero-tag-soft">
-                  <span class="hero-tag-soft-dot"></span>
-                  Lossless source · Gentle mastering
-                </span>
-              </div>
-              <div class="hero-verse">
-                <em>“Speaking to yourselves in psalms and hymns and spiritual songs, singing
-                and making melody in your heart to the Lord.”</em>
-                <small>Ephesians 5:19</small>
+              <div class="brand-text-main">Streams of Grace Radio</div>
+              <div class="brand-text-title">Old Christian Hymns · 24/7</div>
+            </div>
+          </div>
+          <div class="hero-kicker">
+            <span class="hero-kicker-dot"></span>
+            Synchronized · Ad‑free · Worldwide
+          </div>
+          <h1 class="hero-title">
+            Old Hymns, <span>New Light</span>.
+          </h1>
+          <p class="hero-subtitle">
+            A fully synchronized online radio station streaming
+            <strong>classic Christian hymns</strong>, choirs, and gospel songs —
+            every listener hears the same hymn at the same moment in the daily rotation.
+          </p>
+          <div class="hero-verse">
+            <em>“Speaking to yourselves in psalms and hymns and spiritual songs,
+            singing and making melody in your heart to the Lord.”</em>
+            <small>Ephesians 5:19</small>
+          </div>
+          <div class="pill-row">
+            <span class="pill pill-accent">24/7 hymn rotation</span>
+            <span class="pill">Private GitHub library · Cloudflare Worker</span>
+          </div>
+        </header>
+
+        <article class="player-panel" aria-label="Live player">
+          <div class="player-header">
+            <div class="player-status">
+              <span class="badge-live">
+                <span class="badge-live-dot"></span>
+                Live
+              </span>
+              <span>Classic Hymns Channel</span>
+            </div>
+            <div class="player-status-text" id="player-status-text">
+              Press play to join the stream
+            </div>
+          </div>
+
+          <div class="player-main">
+            <div class="player-art" id="art-container">
+              <div class="player-wave"></div>
+              <img id="album-art" src="" alt="Current hymn artwork">
+            </div>
+            <div class="player-track-info">
+              <div class="track-title" id="track-title">Press play to begin</div>
+              <div class="track-meta-row" id="track-artist">Synchronized worldwide rotation</div>
+              <div class="player-controls-row">
+                <button class="btn-main" id="play-button" type="button" aria-label="Play / Pause">
+                  <span></span>
+                </button>
+                <span class="player-tag" id="player-tag">Hymn of the hour</span>
               </div>
             </div>
           </div>
-          <div class="hero-player-shell" aria-label="Now playing">
-            <article class="player-card">
-              <div class="player-header">
-                <div class="player-status">
-                  <span class="player-badge-live">
-                    <span class="player-badge-live-dot"></span>
-                    Live
-                  </span>
-                  Hymnstream · Worldwide
-                </div>
-                <div class="player-time">
-                  Now airing · Sunday Evening Hymns
-                </div>
-              </div>
-              <div class="player-main">
-                <div class="player-art" aria-hidden="true">
-                  <div class="player-wave"></div>
-                </div>
-                <div class="player-track">
-                  <div class="player-track-title" id="trackTitle">Loading hymnstream…</div>
-                  <div class="player-track-meta" id="artistMeta">Please wait</div>
-                  <div class="player-controls">
-                    <button class="btn-ghost" aria-label="Previous track">⏮</button>
-                    <button class="btn-main" id="playBtn" aria-label="Play / Pause stream">
-                      <span></span>
-                    </button>
-                    <button class="btn-ghost" aria-label="Next track">⏭</button>
-                    <span class="tag-pill">Hymn of the hour</span>
-                  </div>
-                </div>
-              </div>
-              <div class="player-timeline" aria-hidden="true">
-                <div class="timeline-track">
-                  <div class="timeline-fill"></div>
-                </div>
-                <div class="player-time-meta">
-                  <span>00:00</span>
-                  <span>--:--</span>
-                </div>
-              </div>
-            </article>
-            <aside class="player-side">
-              <div class="player-side-header">
-                Tonight on Streams of Grace
-              </div>
-              <div class="player-side-row">
-                <span class="station-dot"></span>
-                <span>Old Christian Radio · Classic Hymn Channel</span>
-              </div>
-              <div class="player-side-pill">
-                <div>
-                  Now airing:
-                  <strong id="nowAiring">“Evening Reflections – Piano &amp; Psalms”</strong>
-                </div>
-                <span class="now-pill-badge">Now playing</span>
-              </div>
-              <div class="player-side-row" style="margin-top: 2px;">
-                <span>Up next:</span>
-                <span>
-                  “Revival Radio Hour” · 9:00–10:00 PM
-                </span>
-              </div>
-            </aside>
+
+          <div class="timeline">
+            <div class="timeline-bar">
+              <div class="timeline-fill" id="timeline-fill"></div>
+            </div>
+            <div class="timeline-time-row">
+              <span id="time-elapsed">00:00</span>
+              <span id="time-total">--:--</span>
+            </div>
           </div>
-          <div class="discover-strip">
-            <span class="discover-label">New · Curated</span>
-            <span class="discover-text">
-              Discover <strong>decades of archived broadcasts</strong> — hymn sings,
-              missionary radio hours, and sacred music specials preserved in high‑fidelity.
-            </span>
-            <a href="#archive" class="discover-link">
-              Browse the archive
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 17L17 7M10 7h7v7"></path>
-              </svg>
-            </a>
+
+          <!-- Up Next – always visible -->
+          <div class="next-up" id="next-up">
+            <strong>Up next</strong>
+            <span id="next-track-text">Press play to load playlist</span>
           </div>
-        </section>
-        <!-- The rest of your layout (sidebar, schedule, shows, etc.) remains exactly as you had it -->
-        <!-- (kept for completeness – copy the original sections here) -->
+        </article>
       </section>
-    </main>
-    <footer>
+
+      <aside class="info-panel">
+        <h2 class="info-title">How this station works</h2>
+        <div class="info-body">
+          <p>
+            Streams of Grace runs from a <strong>private audio library</strong>
+            in GitHub. A Cloudflare Worker reads a <strong>tracks.json</strong> file,
+            builds a daily seeded playlist, and keeps every listener joined to
+            the same hymn in a 24‑hour rotation.
+          </p>
+          <div class="info-meta-list">
+            <span>• All MP3s stay private in your repo.</span>
+            <span>• The browser only sees proxied stream URLs from the Worker.</span>
+            <span>• The Worker caches each hymn in memory for smooth playback.</span>
+          </div>
+        </div>
+        <div class="tech-pill">
+          <strong>Tech stack:</strong> GitHub (private repo) for MP3s and
+          <code>tracks.json</code>, a Cloudflare Worker for the synchronized
+          playlist and streaming, and this static HTML player on GitHub Pages.
+        </div>
+      </aside>
+    </div>
+
+    <div class="footer-row">
       <span>
-        © <span id="year"></span> Streams of Grace Radio ·
-        Old Christian music, preserved and played with care.
+        © <span id="year"></span> Streams of Grace Radio · Old Christian music, preserved and played with care.
       </span>
-      <div>
-        <a href="#about">Statement of faith</a>
-        &nbsp;&nbsp;·&nbsp;&nbsp;
-        <a href="#support">Support the work</a>
-      </div>
-    </footer>
+      <span>
+        <a href="#">Back to top</a>
+      </span>
+    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js"></script>
   <script>
-    // CHANGE ONLY THIS LINE
-    const WORKER_URL = "https://radio-proxy98e1.mattproductions16.workers.dev";
+    const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
 
-    let sound = null;
-    let playlist = [];
-    let current = 0;
+    const audioEl = document.getElementById("radio-audio");
+    const playButton = document.getElementById("play-button");
+    const playerStatusText = document.getElementById("player-status-text");
+    const trackTitleEl = document.getElementById("track-title");
+    const trackArtistEl = document.getElementById("track-artist");
+    const timeElapsedEl = document.getElementById("time-elapsed");
+    const timeTotalEl = document.getElementById("time-total");
+    const timelineFill = document.getElementById("timeline-fill");
+    const albumArt = document.getElementById("album-art");
+    const artContainer = document.getElementById("art-container");
+    const nextTrackText = document.getElementById("next-track-text");
+    const nextUp = document.getElementById("next-up");
+    const yearEl = document.getElementById("year");
 
-    const trackTitle = document.getElementById('trackTitle');
-    const artistMeta = document.getElementById('artistMeta');
-    const playBtn = document.getElementById('playBtn');
-    const playIcon = playBtn.querySelector('span');
+    if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-    async function loadPlaylist() {
+    let isPlaying = false;
+    let isUserPaused = false;
+    let trackDuration = 0;
+    let serverOffset = 0;
+    let joinTime = 0;
+    let timerInterval = null;
+    let hasSeeked = false;
+
+    playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
+
+    function updatePlayButton(playing) {
+      playButton.classList.toggle("playing", playing);
+    }
+
+    async function startRadio() {
+      isUserPaused = false;
+      playerStatusText.textContent = "Connecting";
+      playerStatusText.classList.add("loading");
+
       try {
-        const res = await fetch(`${WORKER_URL}/playlist`);
-        playlist = await res.json();
-        playTrack(0);
-      } catch (e) {
-        trackTitle.textContent = "Connection issue – retrying…";
+        const res = await fetch(`${WORKER_BASE}/now`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Worker offline");
+        const data = await res.json();
+
+        trackTitleEl.textContent = data.title || "Unknown Hymn";
+        trackArtistEl.textContent = (data.artist || "Traditional") + " · Synchronized rotation";
+        trackDuration = data.duration || 0;
+        timeTotalEl.textContent = trackDuration ? formatTime(trackDuration) : "--:--";
+
+        // Album art – persists even after pause
+        if (data.artUrl) {
+          albumArt.src = data.artUrl;
+          albumArt.onload = () => artContainer.classList.add("has-art");
+          albumArt.onerror = () => artContainer.classList.remove("has-art");
+        } else {
+          artContainer.classList.remove("has-art");
+          albumArt.src = "";
+        }
+
+        // Up Next – always visible, just dim when no data
+        if (data.next && data.next.title) {
+          nextTrackText.textContent = `${data.next.title} – ${data.next.artist || "Traditional"}`;
+          nextUp.classList.remove("empty");
+        } else {
+          nextTrackText.textContent = "Loading playlist...";
+          nextUp.classList.add("empty");
+        }
+
+        audioEl.src = data.streamUrl;
+        serverOffset = data.position;
+        joinTime = Date.now();
+        hasSeeked = false;
+
+        await audioEl.play();
+
+        isPlaying = true;
+        updatePlayButton(true);
+        playerStatusText.textContent = "Live • Synchronized worldwide";
+        playerStatusText.classList.remove("loading");
+
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateProgress, 500);
+
+      } catch (err) {
+        console.error(err);
+        playerStatusText.textContent = "Retrying";
+        playerStatusText.classList.add("loading");
+        if (!isUserPaused) setTimeout(startRadio, 2000);
       }
     }
 
-    function playTrack(i) {
-      if (sound) sound.unload();
-      current = i;
-      sound = new Howl({
-        src: [playlist[current].url],
-        html5: true,
-        format: ['mp3'],
-        onload() {
-          trackTitle.textContent = playlist[current].title;
-          artistMeta.textContent = playlist[current].artist || "";
-          document.title = `${playlist[current].title} • Streams of Grace Radio`;
-          playIcon.style.borderLeftColor = '#130c05'; // pause look
-        },
-        onend() { playTrack((current + 1) % playlist.length); },
-      });
-      sound.play();
+    function stopRadio(isError = false) {
+      audioEl.pause();
+      audioEl.src = "";
+      isPlaying = false;
+      if (!isError) isUserPaused = true;
+      updatePlayButton(false);
+      playerStatusText.textContent = "Paused · Tap play to resume";
+      playerStatusText.classList.remove("loading");
+      clearInterval(timerInterval);
+      timeElapsedEl.textContent = "00:00";
+      timelineFill.style.width = "0%";
+      // Art and Up Next stay as-is
     }
 
-    playBtn.onclick = () => {
-      if (!playlist.length) { loadPlaylist(); return; }
-      if (sound.playing()) {
-        sound.pause();
-        playIcon.style.borderLeftColor = '#2f1a00'; // play look
-      } else {
-        sound.play();
-        playIcon.style.borderLeftColor = '#130c05'; // pause look
+    audioEl.addEventListener('loadedmetadata', () => {
+      if (!hasSeeked && serverOffset > 0) {
+        audioEl.currentTime = serverOffset;
+        hasSeeked = true;
       }
-    };
+    });
 
-    // First user interaction
-    document.body.addEventListener('click', loadPlaylist, {once: true});
-    document.body.addEventListener('touchstart', loadPlaylist, {once: true});
+    audioEl.addEventListener('error', () => {
+      if (isPlaying && !isUserPaused) {
+        stopRadio(true);
+        setTimeout(startRadio, 1000);
+      }
+    });
 
-    // Year in footer
-    document.getElementById('year').textContent = new Date().getFullYear();
+    audioEl.addEventListener("ended", () => {
+      if (isPlaying) setTimeout(startRadio, 100);
+    });
+
+    audioEl.addEventListener("waiting", () => {
+      playerStatusText.textContent = "Buffering";
+      playerStatusText.classList.add("loading");
+    });
+
+    audioEl.addEventListener("playing", () => {
+      playerStatusText.textContent = "Live • Synchronized worldwide";
+      playerStatusText.classList.remove("loading");
+    });
+
+    function updateProgress() {
+      if (!isPlaying) return;
+      const position = serverOffset + (Date.now() - joinTime) / 1000;
+      timeElapsedEl.textContent = formatTime(position);
+
+      if (trackDuration > 0) {
+        const currentInTrack = position % trackDuration;
+        const percent = (currentInTrack / trackDuration) * 100;
+        timelineFill.style.width = percent + "%";
+      }
+    }
+
+    function formatTime(s) {
+      s = Math.max(0, Math.floor(s));
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
   </script>
 </body>
 </html>
