@@ -703,7 +703,7 @@
     let ms = null;
     let sb = null;
     let reader = null;
-    let remainingXOR = 512;
+    let remainingXOR = 0;
     let queue = [];
 
     const wsUrl = WORKER_BASE.replace("https", "wss") + "/ws";
@@ -732,6 +732,7 @@
         }
         serverOffset = data.position;
         joinTime = Date.now();
+        remainingXOR = 512;
       } else if (data.type === "ping") {
         // Ignore or respond if needed
       }
@@ -770,8 +771,8 @@
         readStream();
 
         await audioEl.play();
-        const currentPosition = serverOffset + (Date.now() - joinTime) / 1000;
-        audioEl.currentTime = currentPosition;
+
+        audioEl.currentTime = serverOffset;
 
         isPlaying = true;
         updatePlayButton(true);
