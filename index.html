@@ -676,7 +676,6 @@
 
   <script>
     const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
-    const STREAM_SECRET = "your_actual_stream_secret_here"; // Replace with your actual STREAM_SECRET
 
     const audioEl = document.getElementById("radio-audio");
     const playButton = document.getElementById("play-button");
@@ -700,51 +699,7 @@
     let serverOffset = 0;
     let joinTime = 0;
     let timerInterval = null;
-    let ms = null;
-    let sb = null;
-    let reader = null;
-    let remainingXOR = 0;
-    let queue = [];
-
-    const wsUrl = WORKER_BASE.replace("https", "wss") + "/ws";
-    const ws = new WebSocket(wsUrl);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "track") {
-        trackTitleEl.textContent = data.title || "Unknown Hymn";
-        trackArtistEl.textContent = (data.artist || "Traditional") + " · Synchronized rotation";
-        trackDuration = data.duration || 0;
-        timeTotalEl.textContent = trackDuration ? formatTime(trackDuration) : "--:--";
-        if (data.artBase64) {
-          albumArt.src = data.artBase64;
-          artContainer.classList.add("has-art");
-        } else {
-          albumArt.src = "";
-          artContainer.classList.remove("has-art");
-        }
-        if (data.next) {
-          nextTrackText.textContent = `${data.next.title} – ${data.next.artist || "Traditional"}`;
-          nextUp.classList.remove("empty");
-        } else {
-          nextTrackText.textContent = "Loading playlist...";
-          nextUp.classList.add("empty");
-        }
-        serverOffset = data.position;
-        joinTime = Date.now();
-        remainingXOR = 512;
-      } else if (data.type === "ping") {
-        // Ignore or respond if needed
-      }
-    };
-
-    ws.onclose = () => {
-      setTimeout(() => location.reload(), 2000);
-    };
-
-    ws.onerror = () => {
-      playerStatusText.textContent = "Connection error";
-    };
+    let hasSeeked = false;
 
     playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
 
@@ -758,21 +713,40 @@
       playerStatusText.classList.add("loading");
 
       try {
-        ms = new MediaSource();
-        audioEl.src = URL.createObjectURL(ms);
-        await new Promise((resolve) => ms.addEventListener("sourceopen", resolve, { once: true }));
-        sb = ms.addSourceBuffer('audio/mp4; codecs="mp4a.40.2"');
-        sb.mode = 'sequence';
-        sb.addEventListener("updateend", processQueue);
+        const res = await fetch(`${WORKER_BASE}/now`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Worker offline");
+        const data = await res.json();
 
-        const res = await fetch(`${WORKER_BASE}/stream`, { cache: "no-store" });
-        if (!res.ok) throw new Error("Stream failed");
-        reader = res.body.getReader();
-        readStream();
+        trackTitleEl.textContent = data.title || "Unknown Hymn";
+        trackArtistEl.textContent = (data.artist || "Traditional") + " · Synchronized rotation";
+        trackDuration = data.duration || 0;
+        timeTotalEl.textContent = trackDuration ? formatTime(trackDuration) : "--:--";
+
+        // Album art – persists even after pause
+        if (data.artUrl) {
+          albumArt.src = data.artUrl;
+          albumArt.onload = () => artContainer.classList.add("has-art");
+          albumArt.onerror = () => artContainer.classList.remove("has-art");
+        } else {
+          artContainer.classList.remove("has-art");
+          albumArt.src = "";
+        }
+
+        // Up Next – always visible, just dim when no data
+        if (data.next && data.next.title) {
+          nextTrackText.textContent = `${data.next.title} – ${data.next.artist || "Traditional"}`;
+          nextUp.classList.remove("empty");
+        } else {
+          nextTrackText.textContent = "Loading playlist...";
+          nextUp.classList.add("empty");
+        }
+
+        audioEl.src = data.streamUrl;
+        serverOffset = data.position;
+        joinTime = Date.now();
+        hasSeeked = false;
 
         await audioEl.play();
-
-        audioEl.currentTime = serverOffset;
 
         isPlaying = true;
         updatePlayButton(true);
@@ -781,8 +755,6 @@
 
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = setInterval(updateProgress, 500);
-
-        setInterval(clearBuffer, 30000);
 
       } catch (err) {
         console.error(err);
@@ -794,13 +766,7 @@
 
     function stopRadio(isError = false) {
       audioEl.pause();
-      if (audioEl.src) URL.revokeObjectURL(audioEl.src);
-      if (reader) reader.cancel();
-      if (ms && ms.readyState === "open") ms.endOfStream();
-      reader = null;
-      ms = null;
-      sb = null;
-      queue = [];
+      audioEl.src = "";
       isPlaying = false;
       if (!isError) isUserPaused = true;
       updatePlayButton(false);
@@ -809,13 +775,25 @@
       clearInterval(timerInterval);
       timeElapsedEl.textContent = "00:00";
       timelineFill.style.width = "0%";
+      // Art and Up Next stay as-is
     }
 
-    audioEl.addEventListener("error", () => {
+    audioEl.addEventListener('loadedmetadata', () => {
+      if (!hasSeeked && serverOffset > 0) {
+        audioEl.currentTime = serverOffset;
+        hasSeeked = true;
+      }
+    });
+
+    audioEl.addEventListener('error', () => {
       if (isPlaying && !isUserPaused) {
         stopRadio(true);
         setTimeout(startRadio, 1000);
       }
+    });
+
+    audioEl.addEventListener("ended", () => {
+      if (isPlaying) setTimeout(startRadio, 100);
     });
 
     audioEl.addEventListener("waiting", () => {
@@ -828,48 +806,15 @@
       playerStatusText.classList.remove("loading");
     });
 
-    function processQueue() {
-      if (queue.length > 0 && !sb.updating) {
-        sb.appendBuffer(queue.shift());
-      }
-    }
-
-    async function readStream() {
-      const key = new TextEncoder().encode(STREAM_SECRET);
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        let chunk = new Uint8Array(value);
-        if (remainingXOR > 0) {
-          const toXOR = Math.min(remainingXOR, chunk.length);
-          for (let i = 0; i < toXOR; i++) {
-            chunk[i] ^= key[i % key.length];
-          }
-          remainingXOR -= toXOR;
-        }
-        if (!sb.updating) {
-          sb.appendBuffer(chunk);
-        } else {
-          queue.push(chunk);
-        }
-      }
-    }
-
-    function clearBuffer() {
-      if (sb && sb.buffered.length > 0 && audioEl.currentTime > 60) {
-        try {
-          sb.remove(0, audioEl.currentTime - 60);
-        } catch (e) {}
-      }
-    }
-
     function updateProgress() {
       if (!isPlaying) return;
       const position = serverOffset + (Date.now() - joinTime) / 1000;
       timeElapsedEl.textContent = formatTime(position);
+
       if (trackDuration > 0) {
-        const percent = (position / trackDuration) * 100;
-        timelineFill.style.width = `${Math.min(100, percent)}%`;
+        const currentInTrack = position % trackDuration;
+        const percent = (currentInTrack / trackDuration) * 100;
+        timelineFill.style.width = percent + "%";
       }
     }
 
