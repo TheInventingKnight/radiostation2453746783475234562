@@ -674,156 +674,128 @@
     </div>
   </div>
 
-  <script>
-    const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
+  <!-- Change the WORKER_BASE if needed -->
+<script>
+  const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
+  const audioEl = document.getElementById("radio-audio");
+  const playButton = document.getElementById("play-button");
+  const playerStatusText = document.getElementById("player-status-text");
+  const trackTitleEl = document.getElementById("track-title");
+  const trackArtistEl = document.getElementById("track-artist");
+  const timeElapsedEl = document.getElementById("time-elapsed");
+  const timeTotalEl = document.getElementById("time-total");
+  const timelineFill = document.getElementById("timeline-fill");
+  const albumArt = document.getElementById("album-art");
+  const artContainer = document.getElementById("art-container");
+  const nextTrackText = document.getElementById("next-track-text");
 
-    const audioEl = document.getElementById("radio-audio");
-    const playButton = document.getElementById("play-button");
-    const playerStatusText = document.getElementById("player-status-text");
-    const trackTitleEl = document.getElementById("track-title");
-    const trackArtistEl = document.getElementById("track-artist");
-    const timeElapsedEl = document.getElementById("time-elapsed");
-    const timeTotalEl = document.getElementById("time-total");
-    const timelineFill = document.getElementById("timeline-fill");
-    const albumArt = document.getElementById("album-art");
-    const artContainer = document.getElementById("art-container");
-    const nextTrackText = document.getElementById("next-track-text");
-    const nextUp = document.getElementById("next-up");
-    const yearEl = document.getElementById("year");
+  let isPlaying = false;
+  let currentTrackData = null;
+  let trackStartTime = 0;
+  let progressTimer = null;
+  let nextTrackTimeout = null;
 
-    if (yearEl) yearEl.textContent = new Date().getFullYear();
+  audioEl.crossOrigin = "anonymous";
 
-    let isPlaying = false;
-    let isUserPaused = false;
-    let trackDuration = 0;
-    let serverOffset = 0;
-    let joinTime = 0;
-    let timerInterval = null;
-    let hasSeeked = false;
-
-    playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
-
-    function updatePlayButton(playing) {
-      playButton.classList.toggle("playing", playing);
+  // Blocks common keyboard shortcuts for "Save As" or "View Source"
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && (e.key === 'u' || e.key === 's' || e.key === 'i' || e.key === 'j')) {
+      e.preventDefault();
     }
+  });
 
-    async function startRadio() {
-      isUserPaused = false;
-      playerStatusText.textContent = "Connecting";
-      playerStatusText.classList.add("loading");
+  document.addEventListener('contextmenu', e => {
+    if (e.target.closest('.player-panel')) e.preventDefault();
+  });
 
-      try {
-        const res = await fetch(`${WORKER_BASE}/now`, { cache: "no-store" });
-        if (!res.ok) throw new Error("Worker offline");
-        const data = await res.json();
+  async function updateMetadata() {
+    try {
+      const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
+      if (!res.ok) {
+        if (res.status === 403) throw new Error("UNAUTHORIZED_ORIGIN");
+        throw new Error("SERVER_ERROR");
+      }
+      
+      const data = await res.json();
+      currentTrackData = data;
 
-        trackTitleEl.textContent = data.title || "Unknown Hymn";
-        trackArtistEl.textContent = (data.artist || "Traditional") + " · Synchronized rotation";
-        trackDuration = data.duration || 0;
-        timeTotalEl.textContent = trackDuration ? formatTime(trackDuration) : "--:--";
-
-        // Album art – persists even after pause
-        if (data.artUrl) {
+      trackTitleEl.textContent = data.title;
+      trackArtistEl.textContent = data.artist + " · Live";
+      timeTotalEl.textContent = formatTime(data.duration);
+      
+      if (data.artUrl) {
           albumArt.src = data.artUrl;
           albumArt.onload = () => artContainer.classList.add("has-art");
-          albumArt.onerror = () => artContainer.classList.remove("has-art");
-        } else {
-          artContainer.classList.remove("has-art");
-          albumArt.src = "";
-        }
-
-        // Up Next – always visible, just dim when no data
-        if (data.next && data.next.title) {
-          nextTrackText.textContent = `${data.next.title} – ${data.next.artist || "Traditional"}`;
-          nextUp.classList.remove("empty");
-        } else {
-          nextTrackText.textContent = "Loading playlist...";
-          nextUp.classList.add("empty");
-        }
-
-        audioEl.src = data.streamUrl;
-        serverOffset = data.position;
-        joinTime = Date.now();
-        hasSeeked = false;
-
-        await audioEl.play();
-
-        isPlaying = true;
-        updatePlayButton(true);
-        playerStatusText.textContent = "Live • Synchronized worldwide";
-        playerStatusText.classList.remove("loading");
-
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(updateProgress, 500);
-
-      } catch (err) {
-        console.error(err);
-        playerStatusText.textContent = "Retrying";
-        playerStatusText.classList.add("loading");
-        if (!isUserPaused) setTimeout(startRadio, 2000);
       }
-    }
-
-    function stopRadio(isError = false) {
-      audioEl.pause();
-      audioEl.src = "";
-      isPlaying = false;
-      if (!isError) isUserPaused = true;
-      updatePlayButton(false);
-      playerStatusText.textContent = "Paused · Tap play to resume";
-      playerStatusText.classList.remove("loading");
-      clearInterval(timerInterval);
-      timeElapsedEl.textContent = "00:00";
-      timelineFill.style.width = "0%";
-      // Art and Up Next stay as-is
-    }
-
-    audioEl.addEventListener('loadedmetadata', () => {
-      if (!hasSeeked && serverOffset > 0) {
-        audioEl.currentTime = serverOffset;
-        hasSeeked = true;
+      if (data.next) {
+          nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
       }
-    });
 
-    audioEl.addEventListener('error', () => {
-      if (isPlaying && !isUserPaused) {
-        stopRadio(true);
-        setTimeout(startRadio, 1000);
+      const remainingMs = (data.duration - data.position) * 1000;
+      clearTimeout(nextTrackTimeout);
+      nextTrackTimeout = setTimeout(updateMetadata, remainingMs + 1000); 
+
+      trackStartTime = Date.now() - (data.position * 1000);
+      return data.streamToken;
+    } catch (e) {
+      if (e.message === "UNAUTHORIZED_ORIGIN") {
+        playerStatusText.textContent = "Error: This player only works on the official website.";
+      } else {
+        console.error("Metadata sync failed");
       }
-    });
-
-    audioEl.addEventListener("ended", () => {
-      if (isPlaying) setTimeout(startRadio, 100);
-    });
-
-    audioEl.addEventListener("waiting", () => {
-      playerStatusText.textContent = "Buffering";
-      playerStatusText.classList.add("loading");
-    });
-
-    audioEl.addEventListener("playing", () => {
-      playerStatusText.textContent = "Live • Synchronized worldwide";
-      playerStatusText.classList.remove("loading");
-    });
-
-    function updateProgress() {
-      if (!isPlaying) return;
-      const position = serverOffset + (Date.now() - joinTime) / 1000;
-      timeElapsedEl.textContent = formatTime(position);
-
-      if (trackDuration > 0) {
-        const currentInTrack = position % trackDuration;
-        const percent = (currentInTrack / trackDuration) * 100;
-        timelineFill.style.width = percent + "%";
-      }
+      return null;
     }
+  }
 
-    function formatTime(s) {
-      s = Math.max(0, Math.floor(s));
-      const m = Math.floor(s / 60);
-      const sec = s % 60;
-      return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  function updateUI() {
+    if (!isPlaying || !currentTrackData) return;
+    const elapsedSeconds = (Date.now() - trackStartTime) / 1000;
+    const currentPos = elapsedSeconds % currentTrackData.duration;
+    timeElapsedEl.textContent = formatTime(currentPos);
+    const percent = (currentPos / currentTrackData.duration) * 100;
+    timelineFill.style.width = `${percent}%`;
+    progressTimer = requestAnimationFrame(updateUI);
+  }
+
+  async function startRadio() {
+    try {
+      playerStatusText.textContent = "Verifying Origin...";
+      const token = await updateMetadata();
+
+      if (!token) return;
+
+      audioEl.src = `${WORKER_BASE}/stream?token=${token}&t=${Date.now()}`;
+
+      await audioEl.play();
+      isPlaying = true;
+      playButton.classList.add("playing");
+      playerStatusText.textContent = "Live • Secure Stream";
+      updateUI();
+    } catch (err) {
+      playerStatusText.textContent = "Connection refused.";
     }
-  </script>
-</body>
+  }
+
+  function stopRadio() {
+    audioEl.pause();
+    audioEl.removeAttribute('src'); // Wipe source on pause
+    audioEl.load();
+    isPlaying = false;
+    playButton.classList.remove("playing");
+    cancelAnimationFrame(progressTimer);
+    clearTimeout(nextTrackTimeout);
+    playerStatusText.textContent = "Paused";
+  }
+
+  playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  document.getElementById("year").textContent = new Date().getFullYear();
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b0186e9a925de34',t:'MTc2NjA5MDk2OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
