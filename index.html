@@ -676,6 +676,7 @@
 
   <!-- Change the WORKER_BASE if needed -->
 <script>
+  // Replace with your actual Worker URL
   const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
   const audioEl = document.getElementById("radio-audio");
   const playButton = document.getElementById("play-button");
@@ -687,89 +688,48 @@
   const timelineFill = document.getElementById("timeline-fill");
   const albumArt = document.getElementById("album-art");
   const artContainer = document.getElementById("art-container");
-  const nextTrackText = document.getElementById("next-track-text");
 
   let isPlaying = false;
   let currentTrackData = null;
   let trackStartTime = 0;
   let progressTimer = null;
-  let nextTrackTimeout = null;
 
   audioEl.crossOrigin = "anonymous";
 
-  // Blocks common keyboard shortcuts for "Save As" or "View Source"
+  // Disable Inspect / Save keys
   window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && (e.key === 'u' || e.key === 's' || e.key === 'i' || e.key === 'j')) {
-      e.preventDefault();
-    }
+    if (e.ctrlKey && ['u', 's', 'i', 'j'].includes(e.key.toLowerCase())) e.preventDefault();
   });
 
-  document.addEventListener('contextmenu', e => {
-    if (e.target.closest('.player-panel')) e.preventDefault();
-  });
-
-  async function updateMetadata() {
+  async function startRadio() {
     try {
+      playerStatusText.textContent = "Connecting to Secure Stream...";
+      
+      // Force no-cache by adding a unique timestamp
       const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
       if (!res.ok) {
-        if (res.status === 403) throw new Error("UNAUTHORIZED_ORIGIN");
-        throw new Error("SERVER_ERROR");
+        if (res.status === 403) {
+          playerStatusText.textContent = "Access Denied: Local playback blocked.";
+        } else {
+          playerStatusText.textContent = "Server Error. Retrying...";
+        }
+        return;
       }
       
       const data = await res.json();
       currentTrackData = data;
-
       trackTitleEl.textContent = data.title;
       trackArtistEl.textContent = data.artist + " · Live";
       timeTotalEl.textContent = formatTime(data.duration);
-      
-      if (data.artUrl) {
-          albumArt.src = data.artUrl;
-          albumArt.onload = () => artContainer.classList.add("has-art");
-      }
-      if (data.next) {
-          nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
-      }
-
-      const remainingMs = (data.duration - data.position) * 1000;
-      clearTimeout(nextTrackTimeout);
-      nextTrackTimeout = setTimeout(updateMetadata, remainingMs + 1000); 
-
       trackStartTime = Date.now() - (data.position * 1000);
-      return data.streamToken;
-    } catch (e) {
-      if (e.message === "UNAUTHORIZED_ORIGIN") {
-        playerStatusText.textContent = "Error: This player only works on the official website.";
-      } else {
-        console.error("Metadata sync failed");
-      }
-      return null;
-    }
-  }
 
-  function updateUI() {
-    if (!isPlaying || !currentTrackData) return;
-    const elapsedSeconds = (Date.now() - trackStartTime) / 1000;
-    const currentPos = elapsedSeconds % currentTrackData.duration;
-    timeElapsedEl.textContent = formatTime(currentPos);
-    const percent = (currentPos / currentTrackData.duration) * 100;
-    timelineFill.style.width = `${percent}%`;
-    progressTimer = requestAnimationFrame(updateUI);
-  }
-
-  async function startRadio() {
-    try {
-      playerStatusText.textContent = "Verifying Origin...";
-      const token = await updateMetadata();
-
-      if (!token) return;
-
-      audioEl.src = `${WORKER_BASE}/stream?token=${token}&t=${Date.now()}`;
+      // Connect to stream with the 60-second security token
+      audioEl.src = `${WORKER_BASE}/stream?token=${data.streamToken}&nocache=${Date.now()}`;
 
       await audioEl.play();
       isPlaying = true;
       playButton.classList.add("playing");
-      playerStatusText.textContent = "Live • Secure Stream";
+      playerStatusText.textContent = "Live • Secure";
       updateUI();
     } catch (err) {
       playerStatusText.textContent = "Connection refused.";
@@ -778,13 +738,21 @@
 
   function stopRadio() {
     audioEl.pause();
-    audioEl.removeAttribute('src'); // Wipe source on pause
+    audioEl.removeAttribute('src'); 
     audioEl.load();
     isPlaying = false;
     playButton.classList.remove("playing");
     cancelAnimationFrame(progressTimer);
-    clearTimeout(nextTrackTimeout);
     playerStatusText.textContent = "Paused";
+  }
+
+  function updateUI() {
+    if (!isPlaying || !currentTrackData) return;
+    const elapsedSeconds = (Date.now() - trackStartTime) / 1000;
+    const currentPos = elapsedSeconds % currentTrackData.duration;
+    timeElapsedEl.textContent = formatTime(currentPos);
+    timelineFill.style.width = `${(currentPos / currentTrackData.duration) * 100}%`;
+    progressTimer = requestAnimationFrame(updateUI);
   }
 
   playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
@@ -794,8 +762,6 @@
     const sec = Math.floor(s % 60);
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   }
-
-  document.getElementById("year").textContent = new Date().getFullYear();
 </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b0186e9a925de34',t:'MTc2NjA5MDk2OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
