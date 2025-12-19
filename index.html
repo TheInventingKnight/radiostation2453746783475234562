@@ -701,11 +701,7 @@
       
       const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
       if (!res.ok) {
-        if (res.status === 403) {
-          playerStatusText.textContent = "Access Denied: Please use the official URL.";
-        } else {
-          playerStatusText.textContent = "Server offline.";
-        }
+        playerStatusText.textContent = res.status === 403 ? "Access Denied: Use official URL." : "Connection error.";
         return;
       }
       
@@ -726,13 +722,13 @@
       updateUI();
     } catch (err) {
       playerStatusText.textContent = "Connection Refused.";
-      console.error(err);
+      console.error("DEBUG INFO:", err);
     }
   }
 
   function stopRadio() {
     audioEl.pause();
-    audioEl.src = ""; // Completely disconnect
+    audioEl.src = "";
     audioEl.load();
     isPlaying = false;
     playButton.classList.remove("playing");
@@ -756,8 +752,6 @@
     const sec = Math.floor(s % 60);
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   }
-
-  document.getElementById("year").textContent = new Date().getFullYear();
 </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b0186e9a925de34',t:'MTc2NjA5MDk2OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
