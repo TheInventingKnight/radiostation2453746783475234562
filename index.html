@@ -676,7 +676,6 @@
 
   <!-- Change the WORKER_BASE if needed -->
 <script>
-  // Replace with your actual Worker URL
   const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
   const audioEl = document.getElementById("radio-audio");
   const playButton = document.getElementById("play-button");
@@ -696,22 +695,16 @@
 
   audioEl.crossOrigin = "anonymous";
 
-  // Disable Inspect / Save keys
-  window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && ['u', 's', 'i', 'j'].includes(e.key.toLowerCase())) e.preventDefault();
-  });
-
   async function startRadio() {
     try {
-      playerStatusText.textContent = "Connecting to Secure Stream...";
+      playerStatusText.textContent = "Connecting...";
       
-      // Force no-cache by adding a unique timestamp
       const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
       if (!res.ok) {
         if (res.status === 403) {
-          playerStatusText.textContent = "Access Denied: Local playback blocked.";
+          playerStatusText.textContent = "Access Denied: Please use the official URL.";
         } else {
-          playerStatusText.textContent = "Server Error. Retrying...";
+          playerStatusText.textContent = "Server offline.";
         }
         return;
       }
@@ -723,22 +716,23 @@
       timeTotalEl.textContent = formatTime(data.duration);
       trackStartTime = Date.now() - (data.position * 1000);
 
-      // Connect to stream with the 60-second security token
-      audioEl.src = `${WORKER_BASE}/stream?token=${data.streamToken}&nocache=${Date.now()}`;
+      // Unique URL per play to prevent caching stutter
+      audioEl.src = `${WORKER_BASE}/stream?token=${data.streamToken}&z=${Date.now()}`;
 
       await audioEl.play();
       isPlaying = true;
       playButton.classList.add("playing");
-      playerStatusText.textContent = "Live • Secure";
+      playerStatusText.textContent = "Live • Secure Stream";
       updateUI();
     } catch (err) {
-      playerStatusText.textContent = "Connection refused.";
+      playerStatusText.textContent = "Connection Refused.";
+      console.error(err);
     }
   }
 
   function stopRadio() {
     audioEl.pause();
-    audioEl.removeAttribute('src'); 
+    audioEl.src = ""; // Completely disconnect
     audioEl.load();
     isPlaying = false;
     playButton.classList.remove("playing");
@@ -762,6 +756,8 @@
     const sec = Math.floor(s % 60);
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   }
+
+  document.getElementById("year").textContent = new Date().getFullYear();
 </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b0186e9a925de34',t:'MTc2NjA5MDk2OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
