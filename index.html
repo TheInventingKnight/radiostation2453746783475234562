@@ -674,130 +674,136 @@
     </div>
   </div>
 
-  <!-- Change the WORKER_BASE if needed -->
-<script>
+  <script>
+  /**
+   * STREAMS OF GRACE — PRO STREAM ENGINE
+   * This engine implements a manual binary parser for the ICY protocol.
+   * It ensures zero extra requests while maintaining real-time metadata updates.
+   */
   const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
-  const audioEl = document.getElementById("radio-audio");
-  const playButton = document.getElementById("play-button");
-  const playerStatusText = document.getElementById("player-status-text");
-  const trackTitleEl = document.getElementById("track-title");
-  const trackArtistEl = document.getElementById("track-artist");
-  const timeElapsedEl = document.getElementById("time-elapsed");
-  const timeTotalEl = document.getElementById("time-total");
-  const timelineFill = document.getElementById("timeline-fill");
-  const albumArt = document.getElementById("album-art");
-  const artContainer = document.getElementById("art-container");
-  const nextTrackText = document.getElementById("next-track-text");
-
+  
+  // UI Elements
+  const playBtn = document.getElementById("play-button");
+  const trackTitle = document.getElementById("track-title");
+  const statusLabel = document.getElementById("player-status-text");
+  
+  let audioContext;
+  let sourceBuffer;
+  let mediaSource;
+  let abortController;
   let isPlaying = false;
-  let currentTrackData = null;
-  let trackStartTime = 0;
-  let progressTimer = null;
-  let metaTimeout = null;
 
-  audioEl.crossOrigin = "anonymous";
-
-  async function updateMetadataOnly() {
+  async function startStreaming() {
+    if (isPlaying) return;
+    
+    statusLabel.textContent = "Negotiating Secure Session...";
+    abortController = new AbortController();
+    
     try {
-      const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
-      if (!res.ok) return;
-      const data = await res.json();
+      // Step 1: Secure Handshake
+      const handshakeRes = await fetch(`${WORKER_BASE}/now`);
+      const { streamUrl, initialTrack } = await handshakeRes.json();
       
-      currentTrackData = data;
-      trackTitleEl.textContent = data.title;
-      trackArtistEl.textContent = data.artist + " · Live";
-      timeTotalEl.textContent = formatTime(data.duration);
-      trackStartTime = Date.now() - (data.position * 1000);
+      trackTitle.textContent = `${initialTrack.title} - ${initialTrack.artist}`;
+      
+      // Step 2: Initialize MediaSource pipeline
+      mediaSource = new MediaSource();
+      const audio = new Audio();
+      audio.src = URL.createObjectURL(mediaSource);
+      audio.crossOrigin = "anonymous";
 
-      // Refresh Art
-      if (data.artUrl) {
-        albumArt.src = data.artUrl;
-        albumArt.onload = () => artContainer.classList.add("has-art");
-      } else {
-        artContainer.classList.remove("has-art");
-      }
+      mediaSource.addEventListener('sourceopen', async () => {
+        sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        
+        // Step 3: Open the Continuous Binary Stream
+        const response = await fetch(streamUrl, { signal: abortController.signal });
+        const reader = response.body.getReader();
+        const icyInt = parseInt(response.headers.get("icy-metaint"));
+        
+        statusLabel.textContent = "Live • Binary Stream Active";
+        isPlaying = true;
+        playBtn.classList.add("playing");
 
-      // Refresh Up Next
-      if (data.next) {
-        nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
-      }
+        let byteCounter = 0;
 
-      // Schedule next refresh
-      const remainingSeconds = data.duration - data.position;
-      clearTimeout(metaTimeout);
-      metaTimeout = setTimeout(updateMetadataOnly, (remainingSeconds + 1) * 1000);
-      
-    } catch (e) { console.error("Meta refresh failed", e); }
-  }
+        // Step 4: Recursive Binary Processing Loop
+        async function processStream() {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-  async function startRadio() {
-    try {
-      playerStatusText.textContent = "Connecting to Secure Stream...";
-      
-      const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
-      if (!res.ok) {
-        playerStatusText.textContent = res.status === 403 ? "Access Denied: Use official URL." : "Connection error.";
-        return;
-      }
-      
-      const data = await res.json();
-      currentTrackData = data;
-      
-      trackTitleEl.textContent = data.title;
-      trackArtistEl.textContent = data.artist + " · Live";
-      timeTotalEl.textContent = formatTime(data.duration);
-      trackStartTime = Date.now() - (data.position * 1000);
-      
-      if (data.artUrl) {
-        albumArt.src = data.artUrl;
-        albumArt.onload = () => artContainer.classList.add("has-art");
-      }
-      if (data.next) {
-        nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
-      }
+              let offset = 0;
+              const data = value;
 
-      audioEl.src = `${WORKER_BASE}/stream?token=${data.streamToken}&z=${Date.now()}`;
-      await audioEl.play();
-      
-      isPlaying = true;
-      playButton.classList.add("playing");
-      playerStatusText.textContent = "Live • Synchronized Stream";
-      
-      updateUI();
-      const remainingSeconds = data.duration - data.position;
-      metaTimeout = setTimeout(updateMetadataOnly, (remainingSeconds + 1) * 1000);
+              while (offset < data.length) {
+                // Handle ICY Metadata Boundary
+                if (byteCounter === icyInt) {
+                  const metaLenByte = data[offset];
+                  const metaLength = metaLenByte * 16;
+                  offset++;
+
+                  if (metaLength > 0) {
+                    const metaSlice = data.slice(offset, offset + metaLength);
+                    const metaString = new TextDecoder().decode(metaSlice);
+                    
+                    // Parse: StreamTitle='Title - Artist';
+                    const match = metaString.match(/StreamTitle='(.*?)';/);
+                    if (match && match[1]) {
+                      trackTitle.textContent = match[1];
+                      console.log("Metadata Update:", match[1]);
+                    }
+                    offset += metaLength;
+                  }
+                  byteCounter = 0;
+                }
+
+                // Audio Chunking Logic
+                const bytesAvailable = data.length - offset;
+                const bytesToNextMeta = icyInt - byteCounter;
+                const chunkToProcess = Math.min(bytesAvailable, bytesToNextMeta);
+
+                if (chunkToProcess > 0) {
+                  const audioChunk = data.slice(offset, offset + chunkToProcess);
+                  
+                  // Wait for SourceBuffer to be ready for more data
+                  if (sourceBuffer && !sourceBuffer.updating) {
+                    sourceBuffer.appendBuffer(audioChunk);
+                  } else {
+                    // Critical: If buffer is busy, wait and retry
+                    await new Promise(r => setTimeout(r, 50));
+                    continue; 
+                  }
+
+                  byteCounter += chunkToProcess;
+                  offset += chunkToProcess;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Stream Loop Error:", e);
+          }
+        }
+
+        processStream();
+        audio.play();
+      });
+
     } catch (err) {
-      playerStatusText.textContent = "Connection Refused.";
+      console.error("Engine Start Failure:", err);
+      statusLabel.textContent = "Connection Refused";
     }
   }
 
-  function stopRadio() {
-    audioEl.pause();
-    audioEl.src = "";
-    audioEl.load();
+  function stopStreaming() {
+    if (abortController) abortController.abort();
     isPlaying = false;
-    playButton.classList.remove("playing");
-    cancelAnimationFrame(progressTimer);
-    clearTimeout(metaTimeout);
-    playerStatusText.textContent = "Paused";
+    playBtn.classList.remove("playing");
+    statusLabel.textContent = "Radio Paused";
+    location.reload(); // Cleanest way to reset binary buffers
   }
 
-  function updateUI() {
-    if (!isPlaying || !currentTrackData) return;
-    const elapsedSeconds = (Date.now() - trackStartTime) / 1000;
-    const currentPos = elapsedSeconds % currentTrackData.duration;
-    timeElapsedEl.textContent = formatTime(currentPos);
-    timelineFill.style.width = `${(currentPos / currentTrackData.duration) * 100}%`;
-    progressTimer = requestAnimationFrame(updateUI);
-  }
-
-  playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
-
-  function formatTime(s) {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-  }
+  playBtn.addEventListener("click", () => isPlaying ? stopStreaming() : startStreaming());
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b0186e9a925de34',t:'MTc2NjA5MDk2OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
