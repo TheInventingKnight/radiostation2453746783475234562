@@ -687,13 +687,48 @@
   const timelineFill = document.getElementById("timeline-fill");
   const albumArt = document.getElementById("album-art");
   const artContainer = document.getElementById("art-container");
+  const nextTrackText = document.getElementById("next-track-text"); // Make sure this ID exists in your HTML
 
   let isPlaying = false;
   let currentTrackData = null;
   let trackStartTime = 0;
   let progressTimer = null;
+  let metaTimeout = null;
 
   audioEl.crossOrigin = "anonymous";
+
+  async function updateMetadataOnly() {
+    try {
+      const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      currentTrackData = data;
+      trackTitleEl.textContent = data.title;
+      trackArtistEl.textContent = data.artist + " · Live";
+      timeTotalEl.textContent = formatTime(data.duration);
+      trackStartTime = Date.now() - (data.position * 1000);
+
+      // Update Art
+      if (data.artUrl) {
+        albumArt.src = data.artUrl;
+        albumArt.onload = () => artContainer.classList.add("has-art");
+      } else {
+        artContainer.classList.remove("has-art");
+      }
+
+      // Update Up Next
+      if (data.next) {
+        nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
+      }
+
+      // SET AUTO-REFRESH: Trigger this function again when the song ends
+      const remainingSeconds = data.duration - data.position;
+      clearTimeout(metaTimeout);
+      metaTimeout = setTimeout(updateMetadataOnly, (remainingSeconds + 1) * 1000);
+      
+    } catch (e) { console.error("Meta refresh failed", e); }
+  }
 
   async function startRadio() {
     try {
@@ -701,28 +736,42 @@
       
       const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
       if (!res.ok) {
-        playerStatusText.textContent = res.status === 403 ? "Access Denied: Use official URL." : "Connection error.";
+        playerStatusText.textContent = "Access Denied.";
         return;
       }
       
       const data = await res.json();
       currentTrackData = data;
+      
+      // Update UI
       trackTitleEl.textContent = data.title;
       trackArtistEl.textContent = data.artist + " · Live";
       timeTotalEl.textContent = formatTime(data.duration);
       trackStartTime = Date.now() - (data.position * 1000);
+      
+      if (data.artUrl) {
+        albumArt.src = data.artUrl;
+        albumArt.onload = () => artContainer.classList.add("has-art");
+      }
+      if (data.next) {
+        nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
+      }
 
-      // Unique URL per play to prevent caching stutter
+      // Start Stream
       audioEl.src = `${WORKER_BASE}/stream?token=${data.streamToken}&z=${Date.now()}`;
-
       await audioEl.play();
+      
       isPlaying = true;
       playButton.classList.add("playing");
       playerStatusText.textContent = "Live • Secure Stream";
+      
+      // Start UI Progress and Meta Timer
       updateUI();
+      const remainingSeconds = data.duration - data.position;
+      metaTimeout = setTimeout(updateMetadataOnly, (remainingSeconds + 1) * 1000);
+
     } catch (err) {
       playerStatusText.textContent = "Connection Refused.";
-      console.error("DEBUG INFO:", err);
     }
   }
 
@@ -733,6 +782,7 @@
     isPlaying = false;
     playButton.classList.remove("playing");
     cancelAnimationFrame(progressTimer);
+    clearTimeout(metaTimeout);
     playerStatusText.textContent = "Paused";
   }
 
