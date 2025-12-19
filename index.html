@@ -687,7 +687,7 @@
   const timelineFill = document.getElementById("timeline-fill");
   const albumArt = document.getElementById("album-art");
   const artContainer = document.getElementById("art-container");
-  const nextTrackText = document.getElementById("next-track-text"); // Make sure this ID exists in your HTML
+  const nextTrackText = document.getElementById("next-track-text");
 
   let isPlaying = false;
   let currentTrackData = null;
@@ -709,7 +709,7 @@
       timeTotalEl.textContent = formatTime(data.duration);
       trackStartTime = Date.now() - (data.position * 1000);
 
-      // Update Art
+      // Refresh Art
       if (data.artUrl) {
         albumArt.src = data.artUrl;
         albumArt.onload = () => artContainer.classList.add("has-art");
@@ -717,12 +717,12 @@
         artContainer.classList.remove("has-art");
       }
 
-      // Update Up Next
+      // Refresh Up Next
       if (data.next) {
         nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
       }
 
-      // SET AUTO-REFRESH: Trigger this function again when the song ends
+      // Schedule next refresh
       const remainingSeconds = data.duration - data.position;
       clearTimeout(metaTimeout);
       metaTimeout = setTimeout(updateMetadataOnly, (remainingSeconds + 1) * 1000);
@@ -732,18 +732,17 @@
 
   async function startRadio() {
     try {
-      playerStatusText.textContent = "Connecting...";
+      playerStatusText.textContent = "Connecting to Secure Stream...";
       
       const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
       if (!res.ok) {
-        playerStatusText.textContent = "Access Denied.";
+        playerStatusText.textContent = res.status === 403 ? "Access Denied: Use official URL." : "Connection error.";
         return;
       }
       
       const data = await res.json();
       currentTrackData = data;
       
-      // Update UI
       trackTitleEl.textContent = data.title;
       trackArtistEl.textContent = data.artist + " · Live";
       timeTotalEl.textContent = formatTime(data.duration);
@@ -757,19 +756,16 @@
         nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
       }
 
-      // Start Stream
       audioEl.src = `${WORKER_BASE}/stream?token=${data.streamToken}&z=${Date.now()}`;
       await audioEl.play();
       
       isPlaying = true;
       playButton.classList.add("playing");
-      playerStatusText.textContent = "Live • Secure Stream";
+      playerStatusText.textContent = "Live • Synchronized Stream";
       
-      // Start UI Progress and Meta Timer
       updateUI();
       const remainingSeconds = data.duration - data.position;
       metaTimeout = setTimeout(updateMetadataOnly, (remainingSeconds + 1) * 1000);
-
     } catch (err) {
       playerStatusText.textContent = "Connection Refused.";
     }
