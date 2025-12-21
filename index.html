@@ -695,97 +695,62 @@
   let currentTrackData = null;
   let trackStartTime = 0; 
   let progressTimer = null;
-  let metadataSource = null; // Stores the EventSource connection
+  let metadataTimer = null;
+  let reconnectAttempts = 0;
 
   audioEl.crossOrigin = "anonymous";
 
-  function connectToRadio() {
-    // Close existing connection if any
-    if (metadataSource) metadataSource.close();
-
-    // 1. Open the Metadata Stream (SSE)
-    // This counts as ONE request that stays open forever.
-    metadataSource = new EventSource(`${WORKER_BASE}/live-metadata`);
-
-    metadataSource.onopen = () => {
-      console.log("Metadata stream connected");
-    };
-
-    metadataSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      updateMetadata(data);
-    };
-
-    metadataSource.onerror = (err) => {
-      console.log("Metadata stream lost, retrying...", err);
-      metadataSource.close();
-      // Auto-reconnect after 5s
-      setTimeout(connectToRadio, 5000);
-    };
-  }
-
-  function updateMetadata(data) {
-    currentTrackData = data;
-    
-    // Update Text
-    trackTitleEl.textContent = data.title;
-    trackArtistEl.textContent = data.artist + " · Live";
-    timeTotalEl.textContent = formatTime(data.duration);
-    if (data.next) nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
-
-    // Update Artwork
-    if (data.artUrl) {
-        if(albumArt.src !== data.artUrl) {
-            albumArt.src = data.artUrl;
-            albumArt.onload = () => artContainer.classList.add("has-art");
-        }
-    } else {
-        artContainer.classList.remove("has-art");
-    }
-
-    // Sync Timers
-    // Because this message arrives exactly when the song starts (or on connect),
-    // we set the start time based on the server's playhead position.
-    trackStartTime = Date.now() - (data.position * 1000);
-  }
-
-  // Initial connection on page load
-  connectToRadio();
-
-  // ------------------------------------------
-  // Playback Logic
-  // ------------------------------------------
-
-  async function startAudio() {
-    playerStatusText.textContent = "Connecting...";
+  async function fetchMetadata(shouldPlay = false) {
     try {
-        // We first hit /connect to get a fresh Secure Token for the audio
-        const res = await fetch(`${WORKER_BASE}/connect`);
-        const loginData = await res.json();
-        
-        // Set audio source to the secure stream URL
-        audioEl.src = loginData.streamUrl;
-        await audioEl.play();
-        
-        isPlaying = true;
-        updatePlayButton(true);
-        playerStatusText.textContent = "Live • Synchronized worldwide";
-        updateUI(); // Start the visual progress bar
-    } catch (err) {
-        console.error(err);
-        playerStatusText.textContent = "Connection failed";
-        isPlaying = false;
-        updatePlayButton(false);
-    }
-  }
+      const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
+      if(!res.ok) throw new Error("Worker Error");
+      
+      const data = await res.json();
+      currentTrackData = data;
+      
+      // Update Text
+      trackTitleEl.textContent = data.title;
+      trackArtistEl.textContent = data.artist + " · Live";
+      timeTotalEl.textContent = formatTime(data.duration);
+      if (data.next) nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
 
-  function stopAudio() {
-    audioEl.pause();
-    audioEl.src = ""; // Fully detach stream
-    isPlaying = false;
-    updatePlayButton(false);
-    playerStatusText.textContent = "Paused";
-    cancelAnimationFrame(progressTimer);
+      // Update Artwork
+      if (data.artUrl) {
+          if(albumArt.src !== data.artUrl) {
+              albumArt.src = data.artUrl;
+              albumArt.onload = () => artContainer.classList.add("has-art");
+          }
+      } else {
+          artContainer.classList.remove("has-art");
+      }
+
+      // Sync Timers
+      trackStartTime = Date.now() - (data.position * 1000);
+      
+      // If we need to connect (first play or reconnect)
+      if(shouldPlay && audioEl.paused) {
+          const secureStreamUrl = data.streamUrl;
+          
+          if (!audioEl.src || !audioEl.src.includes("/stream")) {
+            audioEl.src = secureStreamUrl;
+            await audioEl.play();
+            isPlaying = true;
+            updatePlayButton(true);
+            playerStatusText.textContent = "Live • Synchronized worldwide";
+            reconnectAttempts = 0;
+          }
+      }
+
+      // Schedule next metadata update
+      const remainingMs = (data.duration - data.position) * 1000;
+      clearTimeout(metadataTimer);
+      metadataTimer = setTimeout(() => fetchMetadata(false), remainingMs + 2000); 
+
+    } catch (e) {
+      console.error("Sync error", e);
+      // If initial connect fails, try again soon
+      if(isPlaying || shouldPlay) setTimeout(() => fetchMetadata(shouldPlay), 5000);
+    }
   }
 
   function updateUI() {
@@ -793,28 +758,64 @@
         if(isPlaying) requestAnimationFrame(updateUI);
         return;
     }
-    // Calculate local progress
     const elapsedSeconds = (Date.now() - trackStartTime) / 1000;
-    
-    // Safety check: if we drifted past duration, clamp it
-    const currentPos = Math.min(elapsedSeconds, currentTrackData.duration);
-    
+    const currentPos = elapsedSeconds % currentTrackData.duration;
     timeElapsedEl.textContent = formatTime(currentPos);
     const percent = (currentPos / currentTrackData.duration) * 100;
     timelineFill.style.width = `${Math.min(percent, 100)}%`;
-    
     progressTimer = requestAnimationFrame(updateUI);
   }
 
-  playButton.addEventListener("click", () => isPlaying ? stopAudio() : startAudio());
+  async function startRadio() {
+    playerStatusText.textContent = "Connecting...";
+    try {
+        await fetchMetadata(true);
+        updateUI();
+    } catch (err) {
+        console.error(err);
+        playerStatusText.textContent = "Connection failed";
+    }
+  }
 
-  // Handle Unexpected Audio Drops
-  audioEl.addEventListener("error", () => {
+  function stopRadio() {
+    audioEl.pause();
+    audioEl.src = "";
+    isPlaying = false;
+    updatePlayButton(false);
+    playerStatusText.textContent = "Paused";
+    cancelAnimationFrame(progressTimer);
+    clearTimeout(metadataTimer);
+  }
+
+  function updatePlayButton(playing) {
+    if(playing) playButton.classList.add("playing");
+    else playButton.classList.remove("playing");
+  }
+
+  // Handle Unexpected Drops (Network Issues)
+  audioEl.addEventListener("error", (e) => {
       if(isPlaying) {
-          playerStatusText.textContent = "Reconnecting...";
-          setTimeout(startAudio, 2000); 
+          console.log("Stream dropped, reconnecting...");
+          if(reconnectAttempts < 10) { // More generous reconnects for continuous streams
+              reconnectAttempts++;
+              playerStatusText.textContent = "Reconnecting...";
+              setTimeout(() => fetchMetadata(true), 2000); 
+          } else {
+              stopRadio();
+              playerStatusText.textContent = "Connection Lost. Please refresh.";
+          }
       }
   });
+
+  audioEl.addEventListener("stalled", () => {
+     if(isPlaying) playerStatusText.textContent = "Buffering...";
+  });
+  
+  audioEl.addEventListener("playing", () => {
+     playerStatusText.textContent = "Live • Synchronized worldwide";
+  });
+
+  playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
 
   function formatTime(s) {
     const m = Math.floor(s / 60);
