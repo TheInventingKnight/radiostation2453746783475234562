@@ -5,6 +5,9 @@
   <title>Streams of Grace Radio – Old Christian Hymns 24/7</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    /* DESIGN & STYLING 
+       Preserved exactly as requested for maximum visual quality.
+    */
     :root {
       --bg: #050712;
       --panel: rgba(11, 14, 35, 0.92);
@@ -319,7 +322,6 @@
       overflow: hidden;
     }
 
-    /* Removed the inner circles that were overlaying the art */
     .player-wave {
       position: absolute;
       inset: auto 0 -24% 0;
@@ -463,7 +465,7 @@
       font-family: monospace;
     }
 
-    /* Up Next section – always visible */
+    /* Up Next – always visible */
     .next-up {
       margin-top: 12px;
       padding-top: 12px;
@@ -675,153 +677,196 @@
   </div>
 
   <script>
-  const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
-  
-  // DOM Elements
-  const audioEl = document.getElementById("radio-audio");
-  const playButton = document.getElementById("play-button");
-  const playerStatusText = document.getElementById("player-status-text");
-  const trackTitleEl = document.getElementById("track-title");
-  const trackArtistEl = document.getElementById("track-artist");
-  const timeElapsedEl = document.getElementById("time-elapsed");
-  const timeTotalEl = document.getElementById("time-total");
-  const timelineFill = document.getElementById("timeline-fill");
-  const albumArt = document.getElementById("album-art");
-  const artContainer = document.getElementById("art-container");
-  const nextTrackText = document.getElementById("next-track-text");
+    const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
 
-  // State
-  let isPlaying = false;
-  let currentTrackData = null;
-  let trackStartTime = 0; 
-  let progressTimer = null;
-  let metadataTimer = null;
-  let reconnectAttempts = 0;
+    const audioEl = document.getElementById("radio-audio");
+    const playButton = document.getElementById("play-button");
+    const playerStatusText = document.getElementById("player-status-text");
+    const trackTitleEl = document.getElementById("track-title");
+    const trackArtistEl = document.getElementById("track-artist");
+    const timeElapsedEl = document.getElementById("time-elapsed");
+    const timeTotalEl = document.getElementById("time-total");
+    const timelineFill = document.getElementById("timeline-fill");
+    const albumArt = document.getElementById("album-art");
+    const artContainer = document.getElementById("art-container");
+    const nextTrackText = document.getElementById("next-track-text");
+    const nextUp = document.getElementById("next-up");
+    const yearEl = document.getElementById("year");
 
-  audioEl.crossOrigin = "anonymous";
+    if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  async function fetchMetadata(shouldPlay = false) {
-    try {
-      const res = await fetch(`${WORKER_BASE}/now?t=${Date.now()}`);
-      if(!res.ok) throw new Error("Worker Error");
-      
-      const data = await res.json();
-      currentTrackData = data;
-      
-      // Update Text
-      trackTitleEl.textContent = data.title;
-      trackArtistEl.textContent = data.artist + " · Live";
-      timeTotalEl.textContent = formatTime(data.duration);
-      if (data.next) nextTrackText.textContent = `${data.next.title} - ${data.next.artist}`;
+    let isPlaying = false;
+    let isUserPaused = false;
+    let trackDuration = 0;
+    let serverOffset = 0;
+    let joinTime = 0;
+    let timerInterval = null;
+    let hasSeeked = false;
+    let currentBlobUrl = null; 
 
-      // Update Artwork
-      if (data.artUrl) {
-          if(albumArt.src !== data.artUrl) {
-              albumArt.src = data.artUrl;
-              albumArt.onload = () => artContainer.classList.add("has-art");
+    playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
+
+    function updatePlayButton(playing) {
+      playButton.classList.toggle("playing", playing);
+    }
+
+    async function startRadio() {
+      isUserPaused = false;
+      playerStatusText.textContent = "Connecting";
+      playerStatusText.classList.add("loading");
+
+      try {
+        // --- LATENCY COMPENSATION START ---
+        const requestStart = Date.now();
+        
+        const res = await fetch(WORKER_BASE, { 
+          cache: "no-store",
+          headers: {
+            "Accept": "application/x-grace-radio-secure-v1" 
           }
-      } else {
+        });
+
+        if (res.status === 403) throw new Error("Unauthorized (Security Check Failed)");
+        if (!res.ok) throw new Error("Worker offline");
+        
+        // Wait for full download
+        const buffer = await res.arrayBuffer();
+        
+        // Calculate how long it took to download (in seconds)
+        const downloadTimeSeconds = (Date.now() - requestStart) / 1000;
+
+        const dataView = new DataView(buffer);
+        const metaLength = dataView.getUint32(0, false);
+        const jsonBytes = new Uint8Array(buffer, 4, metaLength);
+        const decoder = new TextDecoder("utf-8");
+        const jsonString = decoder.decode(jsonBytes);
+        const data = JSON.parse(jsonString);
+
+        // --- UPDATE UI ---
+        trackTitleEl.textContent = data.title || "Unknown Hymn";
+        trackArtistEl.textContent = (data.artist || "Traditional") + " · Synchronized rotation";
+        trackDuration = data.duration || 0;
+        timeTotalEl.textContent = trackDuration ? formatTime(trackDuration) : "--:--";
+
+        if (data.artBase64) {
+          albumArt.src = data.artBase64;
+          albumArt.onload = () => artContainer.classList.add("has-art");
+          albumArt.onerror = () => artContainer.classList.remove("has-art");
+        } else {
           artContainer.classList.remove("has-art");
-      }
+          albumArt.src = "";
+        }
 
-      // Sync Timers
-      trackStartTime = Date.now() - (data.position * 1000);
-      
-      // If we need to connect (first play or reconnect)
-      if(shouldPlay && audioEl.paused) {
-          const secureStreamUrl = data.streamUrl;
-          
-          if (!audioEl.src || !audioEl.src.includes("/stream")) {
-            audioEl.src = secureStreamUrl;
-            await audioEl.play();
-            isPlaying = true;
-            updatePlayButton(true);
-            playerStatusText.textContent = "Live • Synchronized worldwide";
-            reconnectAttempts = 0;
-          }
-      }
+        if (data.next && data.next.title) {
+          nextTrackText.textContent = `${data.next.title} – ${data.next.artist || "Traditional"}`;
+          nextUp.classList.remove("empty");
+        } else {
+          nextTrackText.textContent = "Loading playlist...";
+          nextUp.classList.add("empty");
+        }
 
-      // Schedule next metadata update
-      const remainingMs = (data.duration - data.position) * 1000;
-      clearTimeout(metadataTimer);
-      metadataTimer = setTimeout(() => fetchMetadata(false), remainingMs + 2000); 
+        // --- LATENCY COMPENSATION APPLIED ---
+        // We add the time it took to download to the server's offset.
+        // This ensures that if it took 2 seconds to download, we skip 2 seconds ahead
+        // so we are still perfectly in sync with the wall clock.
+        serverOffset = data.position + downloadTimeSeconds;
 
-    } catch (e) {
-      console.error("Sync error", e);
-      // If initial connect fails, try again soon
-      if(isPlaying || shouldPlay) setTimeout(() => fetchMetadata(shouldPlay), 5000);
-    }
-  }
+        joinTime = Date.now();
+        hasSeeked = false;
 
-  function updateUI() {
-    if (!isPlaying || !currentTrackData) {
-        if(isPlaying) requestAnimationFrame(updateUI);
-        return;
-    }
-    const elapsedSeconds = (Date.now() - trackStartTime) / 1000;
-    const currentPos = elapsedSeconds % currentTrackData.duration;
-    timeElapsedEl.textContent = formatTime(currentPos);
-    const percent = (currentPos / currentTrackData.duration) * 100;
-    timelineFill.style.width = `${Math.min(percent, 100)}%`;
-    progressTimer = requestAnimationFrame(updateUI);
-  }
+        if (currentBlobUrl) {
+            URL.revokeObjectURL(currentBlobUrl);
+            currentBlobUrl = null;
+        }
 
-  async function startRadio() {
-    playerStatusText.textContent = "Connecting...";
-    try {
-        await fetchMetadata(true);
-        updateUI();
-    } catch (err) {
+        const audioBytes = new Uint8Array(buffer, 4 + metaLength);
+        const blob = new Blob([audioBytes], { type: "audio/mp4" });
+        currentBlobUrl = URL.createObjectURL(blob);
+        
+        audioEl.src = currentBlobUrl;
+        
+        await audioEl.play();
+
+        isPlaying = true;
+        updatePlayButton(true);
+        playerStatusText.textContent = "Live • Synchronized worldwide";
+        playerStatusText.classList.remove("loading");
+
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateProgress, 500);
+
+      } catch (err) {
         console.error(err);
-        playerStatusText.textContent = "Connection failed";
-    }
-  }
-
-  function stopRadio() {
-    audioEl.pause();
-    audioEl.src = "";
-    isPlaying = false;
-    updatePlayButton(false);
-    playerStatusText.textContent = "Paused";
-    cancelAnimationFrame(progressTimer);
-    clearTimeout(metadataTimer);
-  }
-
-  function updatePlayButton(playing) {
-    if(playing) playButton.classList.add("playing");
-    else playButton.classList.remove("playing");
-  }
-
-  // Handle Unexpected Drops (Network Issues)
-  audioEl.addEventListener("error", (e) => {
-      if(isPlaying) {
-          console.log("Stream dropped, reconnecting...");
-          if(reconnectAttempts < 10) { // More generous reconnects for continuous streams
-              reconnectAttempts++;
-              playerStatusText.textContent = "Reconnecting...";
-              setTimeout(() => fetchMetadata(true), 2000); 
-          } else {
-              stopRadio();
-              playerStatusText.textContent = "Connection Lost. Please refresh.";
-          }
+        playerStatusText.textContent = "Retrying";
+        playerStatusText.classList.add("loading");
+        if (!isUserPaused) setTimeout(startRadio, 2000);
       }
-  });
+    }
 
-  audioEl.addEventListener("stalled", () => {
-     if(isPlaying) playerStatusText.textContent = "Buffering...";
-  });
-  
-  audioEl.addEventListener("playing", () => {
-     playerStatusText.textContent = "Live • Synchronized worldwide";
-  });
+    function stopRadio(isError = false) {
+      audioEl.pause();
+      isPlaying = false;
+      if (!isError) isUserPaused = true;
+      updatePlayButton(false);
+      playerStatusText.textContent = "Paused · Tap play to resume";
+      playerStatusText.classList.remove("loading");
+      clearInterval(timerInterval);
+    }
 
-  playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
+    audioEl.addEventListener('loadedmetadata', () => {
+      // Seek instantly when metadata is loaded from Blob
+      // CRITICAL: We do NOT reset to 0 even if offset is small.
+      // This ensures we jump ahead exactly as much as needed to be in sync.
+      if (!hasSeeked) {
+        audioEl.currentTime = serverOffset;
+        hasSeeked = true;
+      }
+    });
 
-  function formatTime(s) {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-  }
-</script>
+    audioEl.addEventListener('error', () => {
+      if (isPlaying && !isUserPaused) {
+        stopRadio(true);
+        setTimeout(startRadio, 1000);
+      }
+    });
+
+    audioEl.addEventListener("ended", () => {
+      if (isPlaying) {
+        playerStatusText.textContent = "Loading next...";
+        playerStatusText.classList.add("loading");
+        startRadio();
+      }
+    });
+
+    audioEl.addEventListener("waiting", () => {
+      playerStatusText.textContent = "Buffering";
+      playerStatusText.classList.add("loading");
+    });
+
+    audioEl.addEventListener("playing", () => {
+      playerStatusText.textContent = "Live • Synchronized worldwide";
+      playerStatusText.classList.remove("loading");
+    });
+
+    function updateProgress() {
+      if (!isPlaying) return;
+      
+      const position = serverOffset + (Date.now() - joinTime) / 1000;
+      timeElapsedEl.textContent = formatTime(position);
+
+      if (trackDuration > 0) {
+        const currentInTrack = position % trackDuration;
+        const percent = (currentInTrack / trackDuration) * 100;
+        timelineFill.style.width = percent + "%";
+      }
+    }
+
+    function formatTime(s) {
+      s = Math.max(0, Math.floor(s));
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+  </script>
 </body>
 </html>
