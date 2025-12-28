@@ -5,9 +5,7 @@
   <title>Streams of Grace Radio – Old Christian Hymns 24/7</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* DESIGN & STYLING 
-       Preserved exactly as requested for maximum visual quality.
-    */
+    /* DESIGN & STYLING - UNCHANGED */
     :root {
       --bg: #050712;
       --panel: rgba(11, 14, 35, 0.92);
@@ -291,7 +289,6 @@
       min-height: 1.2em;
     }
 
-    /* Loading animation for status text */
     .player-status-text.loading::after {
       content: "";
       display: inline-block;
@@ -559,8 +556,6 @@
     <div class="bg-ornament"></div>
     <div class="grain"></div>
 
-    <audio id="radio-audio" preload="none"></audio>
-
     <div class="layout">
       <section class="hero">
         <header>
@@ -679,7 +674,6 @@
   <script>
     const WORKER_BASE = "https://radio-proxy98e1.mattproductions16.workers.dev";
 
-    const audioEl = document.getElementById("radio-audio");
     const playButton = document.getElementById("play-button");
     const playerStatusText = document.getElementById("player-status-text");
     const trackTitleEl = document.getElementById("track-title");
@@ -695,170 +689,318 @@
 
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
+    // --- DUAL PLAYER "PING PONG" ENGINE ---
+    // We use two audio objects to enable instant gapless switching.
+    // While Player A is playing, Player B loads the next track.
+    const playerA = new Audio();
+    const playerB = new Audio();
+    playerA.preload = "auto";
+    playerB.preload = "auto";
+
+    let activePlayer = playerA;
+    let nextPlayer = playerB;
+    
+    // --- STATE MANAGEMENT ---
     let isPlaying = false;
     let isUserPaused = false;
-    let trackDuration = 0;
-    let serverOffset = 0;
-    let joinTime = 0;
-    let timerInterval = null;
-    let hasSeeked = false;
-    let currentBlobUrl = null; 
+    
+    // Sync Variables
+    let currentTrackData = null;
+    let currentTrackAbsoluteStart = 0;
+    let currentTrackDuration = 0;
+    
+    // Pre-fetching
+    let isPrefetching = false;
+    let nextTrackReady = false;
+    let nextTrackBlobUrl = null;
+    let nextTrackData = null;
 
-    playButton.addEventListener("click", () => isPlaying ? stopRadio() : startRadio());
+    let timerInterval = null;
+
+    // --- CONTROLS ---
+
+    playButton.addEventListener("click", () => {
+      if (isPlaying) {
+        userPause();
+      } else {
+        userPlay();
+      }
+    });
+
+    function userPause() {
+      isUserPaused = true;
+      isPlaying = false;
+      activePlayer.pause();
+      updatePlayButton(false);
+      playerStatusText.textContent = "Paused · Tap play to resume";
+      playerStatusText.classList.remove("loading");
+    }
+
+    function userPlay() {
+      isUserPaused = false;
+      if (currentTrackData && activePlayer.src) {
+        // Resume existing
+        
+        // IMMEDIATE SYNC:
+        // Calculate where we SHOULD be right now.
+        const now = Date.now();
+        const correctTime = (now - currentTrackAbsoluteStart) / 1000;
+        
+        // If the track is over while we were paused?
+        if (correctTime >= currentTrackDuration) {
+             // We missed the end. Just reload fresh.
+             loadAndPlay(null);
+             return;
+        }
+
+        // Seek to the exact second (milli-precision) before playing
+        // This fixes the offset/drift issue.
+        activePlayer.currentTime = correctTime;
+        activePlayer.play();
+        
+        isPlaying = true;
+        updatePlayButton(true);
+        playerStatusText.textContent = "Live • Synchronized worldwide";
+        // No need to call syncCurrentTrack() immediately as we just did it manually.
+      } else {
+        // Start fresh
+        loadAndPlay(null);
+      }
+    }
 
     function updatePlayButton(playing) {
       playButton.classList.toggle("playing", playing);
     }
 
-    async function startRadio() {
-      isUserPaused = false;
-      playerStatusText.textContent = "Connecting";
-      playerStatusText.classList.add("loading");
+    // --- CORE LOGIC ---
+
+    async function loadAndPlay(preloadedData) {
+      if (isUserPaused) return;
+
+      isPlaying = true;
+      updatePlayButton(true);
+
+      // 1. Get Data (either fresh from server or passed from pre-fetch)
+      let data, buffer;
 
       try {
-        // --- LATENCY COMPENSATION START ---
-        const requestStart = Date.now();
+        if (preloadedData) {
+            console.log("Seamless swap to pre-loaded track.");
+            data = preloadedData.data;
+            buffer = preloadedData.buffer;
+        } else {
+            console.log("Fetching fresh track...");
+            playerStatusText.textContent = "Connecting";
+            playerStatusText.classList.add("loading");
+            
+            const res = await fetch(WORKER_BASE, { 
+              cache: "no-store",
+              headers: { "Accept": "application/x-grace-radio-secure-v1" }
+            });
+            if (!res.ok) throw new Error("Worker offline");
+            
+            const rawBuffer = await res.arrayBuffer();
+            const parsed = unpackResponse(rawBuffer);
+            data = parsed.data;
+            buffer = parsed.audioBuffer;
+        }
+
+        // 2. Update Metadata
+        currentTrackData = data;
+        currentTrackDuration = data.duration;
+        // The server sends 'startedAt' (absolute epoch ms). 
+        // We use this as the single source of truth.
+        currentTrackAbsoluteStart = data.startedAt; 
+
+        updateUI(data);
+
+        // 3. Prepare Audio Blob
+        const blob = new Blob([buffer], { type: "audio/mp4" });
+        const blobUrl = URL.createObjectURL(blob);
+
+        // 4. Setup Active Player
+        activePlayer.src = blobUrl;
         
-        const res = await fetch(WORKER_BASE, { 
-          cache: "no-store",
-          headers: {
-            "Accept": "application/x-grace-radio-secure-v1" 
-          }
+        // 5. Calculate Sync Offset
+        // If we are swapping to a pre-fetched track, we expect to be at 0.
+        // If we are joining mid-stream, we calculate the offset.
+        const now = Date.now();
+        const serverOffsetSec = (now - currentTrackAbsoluteStart) / 1000;
+        
+        if (serverOffsetSec > 0 && serverOffsetSec < currentTrackDuration) {
+             activePlayer.currentTime = serverOffsetSec;
+             console.log(`Synced: Seeking to ${serverOffsetSec.toFixed(2)}s`);
+        } else {
+             activePlayer.currentTime = 0;
+        }
+
+        await activePlayer.play();
+        
+        playerStatusText.textContent = "Live • Synchronized worldwide";
+        playerStatusText.classList.remove("loading");
+
+        // 6. Reset Prefetch Flags
+        nextTrackReady = false;
+        isPrefetching = false;
+        
+        // 7. Start Loop
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(gameLoop, 250); // High-res loop
+
+      } catch (err) {
+        console.error("Playback error:", err);
+        playerStatusText.textContent = "Retrying connection...";
+        setTimeout(() => loadAndPlay(null), 2000);
+      }
+    }
+
+    // --- THE GAME LOOP (Replaces simple event listeners) ---
+    // This runs 4x a second to update UI, check sync, and trigger pre-fetch.
+    function gameLoop() {
+      if (!isPlaying || isUserPaused) return;
+
+      const now = Date.now();
+      const elapsed = (now - currentTrackAbsoluteStart) / 1000;
+      
+      // 1. Sync Check (Drift Correction)
+      // If we drift by more than 0.3s (tighter tolerance), correct it.
+      if (Math.abs(activePlayer.currentTime - elapsed) > 0.3) {
+         // Don't correct if we are near the very end to avoid skipping the fade out/finish
+         if (elapsed < currentTrackDuration - 2) {
+             console.log("Drift corrected.");
+             activePlayer.currentTime = elapsed;
+         }
+      }
+
+      // 2. Update UI
+      timeElapsedEl.textContent = formatTime(elapsed);
+      if (currentTrackDuration > 0) {
+        const percent = Math.min(100, (elapsed / currentTrackDuration) * 100);
+        timelineFill.style.width = percent + "%";
+        
+        // 3. Pre-fetch Logic (When < 15s remaining)
+        const remaining = currentTrackDuration - elapsed;
+        if (remaining < 15 && !isPrefetching && !nextTrackReady) {
+            prefetchNext();
+        }
+
+        // 4. Gapless Switch Logic
+        // If we are within 0.2s of the end, or if we passed it
+        if (elapsed >= currentTrackDuration - 0.2) {
+            doSeamlessSwitch();
+        }
+      }
+    }
+
+    async function prefetchNext() {
+      isPrefetching = true;
+      console.log("Pre-fetching next track...");
+      
+      try {
+        // Calculate timestamp for the NEXT track's start
+        const nextStartTs = currentTrackAbsoluteStart + (currentTrackDuration * 1000) + 100; // +100ms padding
+        
+        const url = `${WORKER_BASE}?ts=${nextStartTs}`;
+        const res = await fetch(url, { 
+            cache: "no-store",
+             headers: { "Accept": "application/x-grace-radio-secure-v1" }
         });
-
-        if (res.status === 403) throw new Error("Unauthorized (Security Check Failed)");
-        if (!res.ok) throw new Error("Worker offline");
         
-        // Wait for full download
-        const buffer = await res.arrayBuffer();
-        
-        // Calculate how long it took to download (in seconds)
-        const downloadTimeSeconds = (Date.now() - requestStart) / 1000;
+        if (!res.ok) throw new Error("Prefetch failed");
 
+        const rawBuffer = await res.arrayBuffer();
+        const parsed = unpackResponse(rawBuffer);
+        
+        // Prepare the NEXT player
+        nextTrackData = parsed.data;
+        const blob = new Blob([parsed.audioBuffer], { type: "audio/mp4" });
+        nextTrackBlobUrl = URL.createObjectURL(blob);
+        
+        nextPlayer.src = nextTrackBlobUrl;
+        nextPlayer.load(); // Ensure it buffers
+        
+        nextTrackReady = true;
+        console.log("Next track buffered and ready on secondary player.");
+        
+        // FIX: Do NOT update status text here. Keep it "Live • Synchronized".
+
+      } catch (e) {
+        console.error(e);
+        isPrefetching = false; // Allow retry
+      }
+    }
+
+    function doSeamlessSwitch() {
+        if (!nextTrackReady) {
+            // Fallback if pre-fetch failed: just reload normally
+            console.log("Prefetch missed, doing hard reload.");
+            loadAndPlay(null);
+            return;
+        }
+
+        console.log("Executing Gapless Switch...");
+        
+        // Swap Players
+        const oldPlayer = activePlayer;
+        activePlayer = nextPlayer;
+        nextPlayer = oldPlayer;
+        
+        // Play new one immediately
+        activePlayer.play();
+        
+        // Update Metadata references
+        currentTrackData = nextTrackData;
+        currentTrackDuration = currentTrackData.duration;
+        currentTrackAbsoluteStart = currentTrackData.startedAt;
+        
+        updateUI(currentTrackData);
+        
+        // Reset old player
+        nextPlayer.pause();
+        nextPlayer.src = ""; // Release memory
+        if (nextTrackBlobUrl) URL.revokeObjectURL(nextTrackBlobUrl);
+
+        // Reset flags
+        nextTrackReady = false;
+        isPrefetching = false;
+        
+        // Sync check (correction)
+        // If the switch happened slightly late, adjust currentTime
+        const offset = (Date.now() - currentTrackAbsoluteStart) / 1000;
+        if (offset > 0.1) {
+            activePlayer.currentTime = offset;
+        }
+    }
+
+    // --- HELPERS ---
+
+    function unpackResponse(buffer) {
         const dataView = new DataView(buffer);
         const metaLength = dataView.getUint32(0, false);
         const jsonBytes = new Uint8Array(buffer, 4, metaLength);
         const decoder = new TextDecoder("utf-8");
         const jsonString = decoder.decode(jsonBytes);
         const data = JSON.parse(jsonString);
+        const audioBuffer = buffer.slice(4 + metaLength);
+        return { data, audioBuffer };
+    }
 
-        // --- UPDATE UI ---
-        trackTitleEl.textContent = data.title || "Unknown Hymn";
-        trackArtistEl.textContent = (data.artist || "Traditional") + " · Synchronized rotation";
-        trackDuration = data.duration || 0;
-        timeTotalEl.textContent = trackDuration ? formatTime(trackDuration) : "--:--";
-
+    function updateUI(data) {
+        trackTitleEl.textContent = data.title;
+        trackArtistEl.textContent = data.artist;
+        timeTotalEl.textContent = formatTime(data.duration);
+        
         if (data.artBase64) {
           albumArt.src = data.artBase64;
           albumArt.onload = () => artContainer.classList.add("has-art");
-          albumArt.onerror = () => artContainer.classList.remove("has-art");
         } else {
           artContainer.classList.remove("has-art");
-          albumArt.src = "";
         }
-
-        if (data.next && data.next.title) {
-          nextTrackText.textContent = `${data.next.title} – ${data.next.artist || "Traditional"}`;
-          nextUp.classList.remove("empty");
-        } else {
-          nextTrackText.textContent = "Loading playlist...";
-          nextUp.classList.add("empty");
-        }
-
-        // --- LATENCY COMPENSATION APPLIED ---
-        // We add the time it took to download to the server's offset.
-        // This ensures that if it took 2 seconds to download, we skip 2 seconds ahead
-        // so we are still perfectly in sync with the wall clock.
-        serverOffset = data.position + downloadTimeSeconds;
-
-        joinTime = Date.now();
-        hasSeeked = false;
-
-        if (currentBlobUrl) {
-            URL.revokeObjectURL(currentBlobUrl);
-            currentBlobUrl = null;
-        }
-
-        const audioBytes = new Uint8Array(buffer, 4 + metaLength);
-        const blob = new Blob([audioBytes], { type: "audio/mp4" });
-        currentBlobUrl = URL.createObjectURL(blob);
         
-        audioEl.src = currentBlobUrl;
-        
-        await audioEl.play();
-
-        isPlaying = true;
-        updatePlayButton(true);
-        playerStatusText.textContent = "Live • Synchronized worldwide";
-        playerStatusText.classList.remove("loading");
-
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(updateProgress, 500);
-
-      } catch (err) {
-        console.error(err);
-        playerStatusText.textContent = "Retrying";
-        playerStatusText.classList.add("loading");
-        if (!isUserPaused) setTimeout(startRadio, 2000);
-      }
-    }
-
-    function stopRadio(isError = false) {
-      audioEl.pause();
-      isPlaying = false;
-      if (!isError) isUserPaused = true;
-      updatePlayButton(false);
-      playerStatusText.textContent = "Paused · Tap play to resume";
-      playerStatusText.classList.remove("loading");
-      clearInterval(timerInterval);
-    }
-
-    audioEl.addEventListener('loadedmetadata', () => {
-      // Seek instantly when metadata is loaded from Blob
-      // CRITICAL: We do NOT reset to 0 even if offset is small.
-      // This ensures we jump ahead exactly as much as needed to be in sync.
-      if (!hasSeeked) {
-        audioEl.currentTime = serverOffset;
-        hasSeeked = true;
-      }
-    });
-
-    audioEl.addEventListener('error', () => {
-      if (isPlaying && !isUserPaused) {
-        stopRadio(true);
-        setTimeout(startRadio, 1000);
-      }
-    });
-
-    audioEl.addEventListener("ended", () => {
-      if (isPlaying) {
-        playerStatusText.textContent = "Loading next...";
-        playerStatusText.classList.add("loading");
-        startRadio();
-      }
-    });
-
-    audioEl.addEventListener("waiting", () => {
-      playerStatusText.textContent = "Buffering";
-      playerStatusText.classList.add("loading");
-    });
-
-    audioEl.addEventListener("playing", () => {
-      playerStatusText.textContent = "Live • Synchronized worldwide";
-      playerStatusText.classList.remove("loading");
-    });
-
-    function updateProgress() {
-      if (!isPlaying) return;
-      
-      const position = serverOffset + (Date.now() - joinTime) / 1000;
-      timeElapsedEl.textContent = formatTime(position);
-
-      if (trackDuration > 0) {
-        const currentInTrack = position % trackDuration;
-        const percent = (currentInTrack / trackDuration) * 100;
-        timelineFill.style.width = percent + "%";
-      }
+        if (data.next) {
+            nextTrackText.textContent = `${data.next.title} – ${data.next.artist}`;
+            nextUp.classList.remove("empty");
+        }
     }
 
     function formatTime(s) {
